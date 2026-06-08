@@ -1,0 +1,69 @@
+{
+  "skill": "handday-auto-bug-fix",
+  "description": "auto-bug-fix skill 依赖的 subagent 与子 skill 清单及初始化状态记录。skill 初始化时读取本文件，逐项检查依赖是否已存在于环境中，缺失则按对应环境创建方式从 templatePath 初始化，避免重复创建。",
+  "requiredSubagents": [
+    {
+      "name": "frontend-bug-fixer",
+      "role": "前端专家",
+      "templatePath": "agents/frontend-bug-fixer.md",
+      "required": true,
+      "usedInSteps": ["Step 2 分派", "Step 3.1 前端排查", "Step 5 前端修复"]
+    },
+    {
+      "name": "senior-java-expert",
+      "role": "后端专家",
+      "templatePath": "agents/senior-java-expert.md",
+      "required": true,
+      "usedInSteps": ["Step 2 分派", "Step 3.2 后端排查", "Step 5 后端修复"]
+    }
+  ],
+  "requiredSkills": [
+    {
+      "name": "handday-workorder",
+      "role": "工单信息采集",
+      "type": "user",
+      "templatePath": "skills/handday-workorder/",
+      "files": ["SKILL.md", "api-reference.md"],
+      "required": true,
+      "usedInSteps": ["Step 1.2 工单信息采集"]
+    },
+    {
+      "name": "code-review",
+      "role": "代码审查",
+      "type": "builtin",
+      "templatePath": null,
+      "required": true,
+      "note": "内置 skill，所有环境自带，无需备份/安装，仅检查可用性",
+      "usedInSteps": ["Step 6 代码审查"]
+    }
+  ],
+  "installLocations": {
+    "agentsProject": ".qoder/agents/",
+    "agentsUser": "~/.qoder/agents/",
+    "skillsProject": ".qoder/skills/",
+    "skillsUser": "~/.qoder/skills/"
+  },
+  "initStatus": {
+    "_comment": "每次完成检查/创建后回写。key 为依赖 name，value 含 present(是否就绪)、source(present|created|installed|builtin|template)、checkedAt(检查时间)。",
+    "frontend-bug-fixer": {
+      "present": true,
+      "source": "present",
+      "checkedAt": "2026-06-08"
+    },
+    "senior-java-expert": {
+      "present": true,
+      "source": "present",
+      "checkedAt": "2026-06-08"
+    },
+    "handday-workorder": {
+      "present": true,
+      "source": "present",
+      "checkedAt": "2026-06-08"
+    },
+    "code-review": {
+      "present": true,
+      "source": "builtin",
+      "checkedAt": "2026-06-08"
+    }
+  }
+}
