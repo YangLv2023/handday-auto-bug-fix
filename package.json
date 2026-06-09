@@ -1,0 +1,41 @@
+{
+  "name": "@handday-neil/auto-bug-fix",
+  "version": "1.0.1",
+  "description": "全自动Bug修复多Agent协作编排技能 - Qoder Skill。接收bug链接/图片/描述后自动完成信息采集→分析定位→修复→代码审查全流程。",
+  "main": "index.js",
+  "bin": {
+    "handday-auto-bug-fix": "bin/cli.js"
+  },
+  "files": [
+    "SKILL.md",
+    "README.md",
+    "index.js",
+    "bin/",
+    "agents/",
+    "skills/"
+  ],
+  "scripts": {
+    "install-skill": "node bin/cli.js install",
+    "uninstall-skill": "node bin/cli.js uninstall",
+    "status": "node bin/cli.js status",
+    "pack": "npm pack"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "qoder",
+    "skill",
+    "handday",
+    "auto-bug-fix",
+    "agent",
+    "bug-fix",
+    "automation"
+  ],
+  "author": "Neil",
+  "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": ""
+  }
+}

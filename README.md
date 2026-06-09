@@ -34,6 +34,10 @@
 handday-auto-bug-fix/
 ├── SKILL.md                              # 主 Skill 定义（流程编排逻辑）
 ├── README.md                             # 本文件
+├── package.json                          # npm 包配置（@handday-neil/auto-bug-fix）
+├── index.js                              # npm 安装核心逻辑
+├── bin/
+│   └── cli.js                            # CLI 入口（handday-auto-bug-fix 命令）
 ├── agents/                               # Subagent 模板（备份）
 │   ├── manifest.json                     # 依赖清单 & 初始化状态
 │   ├── frontend-bug-fixer.md             # 前端专家 subagent 配置
@@ -62,7 +66,40 @@ handday-auto-bug-fix/
 
 ## 安装
 
-### 方式一：直接复制（推荐）
+### 方式一：npm 安装（推荐）
+
+
+**一键安装**（推荐，无需全局安装）：
+
+```powershell
+npx @handday-neil/auto-bug-fix install
+```
+
+**全局安装**：
+
+```powershell
+# 第一步：全局安装包
+npm install -g @handday-neil/auto-bug-fix
+
+# 第二步：执行安装命令，将技能部署到 ~/.qoder/skills/
+handday-auto-bug-fix install
+```
+
+```bash
+# macOS / Linux
+npm install -g @handday-neil/auto-bug-fix
+handday-auto-bug-fix install
+```
+
+**升级到最新版**：
+
+```powershell
+npx @handday-neil/auto-bug-fix@latest install
+```
+
+---
+
+### 方式二：直接复制
 
 将整个 `handday-auto-bug-fix` 目录复制到 Qoder 的 Skills 目录：
 
@@ -90,7 +127,7 @@ Copy-Item -Recurse "handday-auto-bug-fix" ".qoder\skills\handday-auto-bug-fix"
 cp -r handday-auto-bug-fix .qoder/skills/handday-auto-bug-fix
 ```
 
-### 方式二：Git Clone
+### 方式三：Git Clone
 
 ```bash
 # 用户级
