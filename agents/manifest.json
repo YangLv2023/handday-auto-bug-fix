@@ -66,10 +66,21 @@
     }
   ],
   "installLocations": {
-    "agentsProject": ".qoder/agents/",
-    "agentsUser": "~/.qoder/agents/",
-    "skillsProject": ".qoder/skills/",
-    "skillsUser": "~/.qoder/skills/"
+    "_comment": "支持 Qoder 和 Workbuddy 两种环境。安装器默认同时安装到两个环境，可通过 --target 参数指定单一目标。",
+    "qoder": {
+      "agentsProject": ".qoder/agents/",
+      "agentsUser": "~/.qoder/agents/",
+      "skillsProject": ".qoder/skills/",
+      "skillsUser": "~/.qoder/skills/",
+      "note": "Qoder 环境下 agents 和子 skill 作为备份存储在主 skill 目录中，由 Step 0 运行时自动初始化到上述位置"
+    },
+    "workbuddy": {
+      "agentsProject": ".workbuddy/agents/",
+      "agentsUser": "~/.workbuddy/agents/",
+      "skillsProject": ".workbuddy/skills/",
+      "skillsUser": "~/.workbuddy/skills/",
+      "note": "Workbuddy 环境下 agents 和子 skill 在安装时直接安装到上述位置，立即可用。安装后需执行 /reload-plugins 生效"
+    }
   },
   "initStatus": {
     "_comment": "每次完成检查/创建后回写。key 为依赖 name，value 含 present(是否就绪)、source(present|created|installed|builtin|template)、checkedAt(检查时间)。",

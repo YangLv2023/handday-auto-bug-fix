@@ -1,10 +1,10 @@
 # Handday Auto Bug Fix
 
-> Qoder 全自动 Bug 诊断与修复 Skill —— 多 Agent 协作编排，从 Bug 采集到修复审查一站式完成。
+> 全自动 Bug 诊断与修复 Skill —— 支持 Qoder 和 Workbuddy 环境，多 Agent 协作编排，从 Bug 采集到修复审查一站式完成。
 
 ## 简介
 
-`handday-auto-bug-fix` 是一个面向 [Qoder](https://qoder.ai) 的高级 Skill，采用 **多 Agent 协作模式**，实现 Bug 的全自动处理：
+`handday-auto-bug-fix` 是一个面向 [Qoder](https://qoder.ai) 和 Workbuddy 的高级 Skill，采用 **多 Agent 协作模式**，实现 Bug 的全自动处理：
 
 - **PM（主 Agent）**：流程编排、任务分配、协调各 Agent、最终汇报
 - **前端专家（`frontend-bug-fixer` subagent）**：页面定位、接口追踪、前端问题分析与修复
@@ -93,7 +93,7 @@ handday-auto-bug-fix/
 
 ### 必需
 
-- **Qoder IDE**（VS Code / JetBrains 插件）
+- **Qoder IDE**（VS Code / JetBrains 插件）或 **Workbuddy** 环境
 - **Chrome DevTools MCP Server**：工单采集需要通过浏览器自动化访问 handday OS 平台
 - **Node.js**：用于运行 CodeGraph 代码检索工具
 
@@ -113,13 +113,22 @@ handday-auto-bug-fix/
 
 ## 安装
 
+本 Skill 同时支持 **Qoder**（`~/.qoder/`）和 **Workbuddy**（`~/.workbuddy/`）两种环境。npm 安装器默认同时安装到两个环境，也可通过 `--target` 参数指定单一目标。
+
 ### 方式一：npm 安装（推荐）
 
 
 **一键安装/升级**（推荐，无需全局安装，始终拉取最新版）：
 
 ```powershell
+# 安装到所有支持的环境（Qoder + Workbuddy）
 npx @handday-neil/auto-bug-fix@latest install
+
+# 仅安装到 Qoder
+npx @handday-neil/auto-bug-fix@latest install --target qoder
+
+# 仅安装到 Workbuddy
+npx @handday-neil/auto-bug-fix@latest install --target workbuddy
 ```
 
 **全局安装**：
@@ -128,8 +137,12 @@ npx @handday-neil/auto-bug-fix@latest install
 # 第一步：全局安装包
 npm install -g @handday-neil/auto-bug-fix
 
-# 第二步：执行安装命令，将技能部署到 ~/.qoder/skills/
+# 第二步：执行安装命令（默认安装到所有环境）
 handday-auto-bug-fix install
+
+# 或指定单一目标
+handday-auto-bug-fix install --target qoder
+handday-auto-bug-fix install --target workbuddy
 ```
 
 ```bash
@@ -142,9 +155,9 @@ handday-auto-bug-fix install
 
 ### 方式二：直接复制
 
-将整个 `handday-auto-bug-fix` 目录复制到 Qoder 的 Skills 目录：
+将整个 `handday-auto-bug-fix` 目录复制到目标环境的 Skills 目录：
 
-**用户级安装**（对所有项目生效）：
+**Qoder 用户级安装**（对所有项目生效）：
 
 ```powershell
 # Windows
@@ -156,33 +169,61 @@ Copy-Item -Recurse "handday-auto-bug-fix" "$env:USERPROFILE\.qoder\skills\handda
 cp -r handday-auto-bug-fix ~/.qoder/skills/handday-auto-bug-fix
 ```
 
-**项目级安装**（仅对当前项目生效）：
+**Workbuddy 用户级安装**（对所有项目生效）：
 
 ```powershell
 # Windows
-Copy-Item -Recurse "handday-auto-bug-fix" ".qoder\skills\handday-auto-bug-fix"
+Copy-Item -Recurse "handday-auto-bug-fix" "$env:USERPROFILE\.workbuddy\skills\handday-auto-bug-fix"
 ```
 
 ```bash
 # macOS / Linux
+cp -r handday-auto-bug-fix ~/.workbuddy/skills/handday-auto-bug-fix
+```
+
+> **Workbuddy 额外步骤**：Workbuddy 环境下，还需将 `agents/` 目录下的 `.md` 文件复制到 `~/.workbuddy/agents/`，将 `skills/` 下的子 skill 目录复制到 `~/.workbuddy/skills/`。npm 安装器会自动完成这些操作，手动复制时需自行处理。完成后执行 `/reload-plugins` 生效。
+
+**项目级安装**（仅对当前项目生效）：
+
+```powershell
+# Windows - Qoder
+Copy-Item -Recurse "handday-auto-bug-fix" ".qoder\skills\handday-auto-bug-fix"
+
+# Windows - Workbuddy
+Copy-Item -Recurse "handday-auto-bug-fix" ".workbuddy\skills\handday-auto-bug-fix"
+```
+
+```bash
+# macOS / Linux - Qoder
 cp -r handday-auto-bug-fix .qoder/skills/handday-auto-bug-fix
+
+# macOS / Linux - Workbuddy
+cp -r handday-auto-bug-fix .workbuddy/skills/handday-auto-bug-fix
 ```
 
 ### 方式三：Git Clone
 
 ```bash
-# 用户级
+# Qoder 用户级
 cd ~/.qoder/skills
 git clone <本仓库地址> handday-auto-bug-fix
 
-# 项目级
+# Workbuddy 用户级
+cd ~/.workbuddy/skills
+git clone <本仓库地址> handday-auto-bug-fix
+
+# Qoder 项目级
 cd .qoder/skills
+git clone <本仓库地址> handday-auto-bug-fix
+
+# Workbuddy 项目级
+cd .workbuddy/skills
 git clone <本仓库地址> handday-auto-bug-fix
 ```
 
 ### 安装后验证
 
-安装完成后，在 Qoder 中输入以下触发词验证 Skill 是否被识别：
+安装完成后，输入以下触发词验证 Skill 是否被识别：
 
 ```
 bug、报错、异常、fix、修复、错误、问题排查、堆栈、500、NPE、接口报错、工单bug、禅道bug
@@ -190,10 +231,12 @@ bug、报错、异常、fix、修复、错误、问题排查、堆栈、500、NP
 
 Skill 首次运行时会自动执行 **Step 0 环境初始化**：
 1. 读取 `agents/manifest.json` 获取依赖清单
-2. 检查 `frontend-bug-fixer`、`senior-java-expert`、`tencent-cloud-troubleshooter` 三个 subagent 是否已存在，缺失则自动创建
-3. 检查 `handday-workorder`、`tccli-setup`、`tccli-log-query` 三个子 Skill 是否已存在，缺失则自动从备份安装
-4. `code-review` 为 Qoder 内置 Skill，无需安装
+2. 检查 `frontend-bug-fixer`、`senior-java-expert`、`tencent-cloud-troubleshooter` 三个 subagent 是否已存在（同时检查 Qoder 和 Workbuddy 路径），缺失则自动创建
+3. 检查 `handday-workorder`、`tccli-setup`、`tccli-log-query` 三个子 Skill 是否已存在（同时检查 Qoder 和 Workbuddy 路径），缺失则自动从备份安装
+4. `code-review` 为内置 Skill，无需安装
 
+> **Workbuddy 注意**：安装到 Workbuddy 后需执行 `/reload-plugins` 命令使新配置生效，无需重启。
+>
 > **TCCLI 工具说明**：`tccli-setup` 和 `tccli-log-query` 安装的是技能配置文件，TCCLI 命令行工具本身的安装和认证配置在运行时由 `tencent-cloud-troubleshooter` 检查。TCCLI 未安装不阻塞主流程，仅影响可选的生产日志抓取步骤。
 
 ## 使用方式

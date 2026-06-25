@@ -22,6 +22,8 @@ description: 全自动Bug诊断与修复编排器。采用多Agent协作模式�
 > 新环境首次运行时，[Step 0](#step-0-环境初始化与依赖检查subagent--子-skill必须最先执行) 会自动检查并从备份初始化缺失的 subagent / 子 skill，无需手动安装。
 >
 > **安装后须知**：本 skill 安装完成后，`tccli-setup`、`tccli-log-query` 两个子 skill 和 `tencent-cloud-troubleshooter` 子 agent 会随 Step 0 环境初始化自动检查并安装。如环境中已存在同名 skill/agent 则跳过，否则从备份自动安装。
+>
+> **多环境支持**：本 skill 同时支持 Qoder（`~/.qoder/`）和 Workbuddy（`~/.workbuddy/`）两种环境。npm 安装器默认同时安装到两个环境，也可通过 `--target qoder` 或 `--target workbuddy` 指定单一目标。Workbuddy 环境下 agents 和子 skill 在安装时直接安装到对应目录（立即可用），Qoder 环境下由 Step 0 运行时自动初始化。Workbuddy 安装后需执行 `/reload-plugins` 生效。
 
 ---
 
@@ -175,41 +177,57 @@ Step 0: 环境初始化 → 用户输入Bug → Step 1: 信息采集 → Step 1.
 
 ### 0.2 检查 subagent 是否已存在
 
-对每个 subagent，按优先级检查是否存在同名 `.md` 配置：
+对每个 subagent，按优先级检查是否存在同名 `.md` 配置，**同时检查 Qoder 和 Workbuddy 两种环境路径**：
 
+**Qoder 路径**：
 1. 项目级：`<项目根>/.qoder/agents/<name>.md`
 2. 用户级：`~/.qoder/agents/<name>.md`（Windows 为 `C:\Users\<用户>\.qoder\agents\<name>.md`）
 
+**Workbuddy 路径**：
+3. 项目级：`<项目根>/.workbuddy/agents/<name>.md`
+4. 用户级：`~/.workbuddy/agents/<name>.md`（Windows 为 `C:\Users\<用户>\.workbuddy\agents\<name>.md`）
+
 任一位置存在即视为**已就绪**，跳过创建，并在 `manifest.json` 的 `initStatus` 中回写 `present:true, source:"present"`。
+
+> **Workbuddy 说明**：若通过 npm 安装器安装到 Workbuddy，agents 已在安装时直接复制到 `~/.workbuddy/agents/`，此处检查应直接命中。
 
 ### 0.3 subagent 不存在时按环境自动创建
 
-若两个位置都不存在，则按当前编辑器环境触发创建流程（用户级目录 `~/.qoder/agents/` 为默认安装位置）：
+若以上四个位置都不存在，则按当前编辑器环境触发创建流程：
 
 | 环境 | 创建方式 |
-|------|---------|
-| **Qoder** | 调用 `/create-subagent` 命令，并以 `agents/<name>.md` 模板内容作为该 subagent 的配置（frontmatter + system prompt 直接复用模板） |
+|------|----------|
+| **Qoder** | 调用 `/create-subagent` 命令，并以 `agents/<name>.md` 模板内容作为该 subagent 的配置（frontmatter + system prompt 直接复用模板），写入 `~/.qoder/agents/<name>.md` |
+| **Workbuddy** | 将 `agents/<name>.md` 模板内容直接复制到 `~/.workbuddy/agents/<name>.md`，保持 frontmatter 与正文一致。创建后执行 `/reload-plugins` 生效 |
 | **其他编辑器（如 Cursor/VSCode 等）** | 按该编辑器的 subagent/custom-agent 规范创建：将模板内容写入其约定的 agents 配置目录（无统一目录时，回退写入 `~/.qoder/agents/<name>.md`），保持 frontmatter 与正文一致 |
 
 > 创建的本质：把 `agents/` 子目录下的模板**复制/落地**到环境的 agents 目录。模板是单一事实来源（single source of truth）。
 
 ### 0.4 检查子 skill 是否已存在
 
-对 `requiredSkills` 中 `type` 为 `user` 的子 skill（如 `handday-workorder`），按优先级检查是否存在同名 skill 目录及其 `SKILL.md`：
+对 `requiredSkills` 中 `type` 为 `user` 的子 skill（如 `handday-workorder`），按优先级检查是否存在同名 skill 目录及其 `SKILL.md`，**同时检查 Qoder 和 Workbuddy 两种环境路径**：
 
+**Qoder 路径**：
 1. 项目级：`<项目根>/.qoder/skills/<name>/SKILL.md`
 2. 用户级：`~/.qoder/skills/<name>/SKILL.md`（Windows 为 `C:\Users\<用户>\.qoder\skills\<name>\SKILL.md`）
+
+**Workbuddy 路径**：
+3. 项目级：`<项目根>/.workbuddy/skills/<name>/SKILL.md`
+4. 用户级：`~/.workbuddy/skills/<name>/SKILL.md`（Windows 为 `C:\Users\<用户>\.workbuddy\skills\<name>\SKILL.md`）
 
 - 任一位置存在即视为**已就绪**，跳过安装。
 - 对 `type` 为 `builtin` 的子 skill（如 `code-review`）：内置自带，**无需安装**，仅确认其在当前 skill 列表中可调用即可，`initStatus.source` 记为 `builtin`。
 
+> **Workbuddy 说明**：若通过 npm 安装器安装到 Workbuddy，子 skill 已在安装时直接复制到 `~/.workbuddy/skills/<name>/`，此处检查应直接命中。
+
 ### 0.5 子 skill 缺失时从备份自动安装
 
-若某 `user` 类型子 skill 两个位置都不存在，则从本 skill 的 `skills/<name>/` 备份安装（用户级 `~/.qoder/skills/` 为默认安装位置）：
+若某 `user` 类型子 skill 以上四个位置都不存在，则从本 skill 的 `skills/<name>/` 备份安装：
 
 | 环境 | 安装方式 |
-|------|---------|
+|------|----------|
 | **Qoder** | 将备份目录 `skills/<name>/` 下的全部文件（见 manifest `files`，如 `SKILL.md`、`api-reference.md`）完整复制到 `~/.qoder/skills/<name>/`，保持目录结构与文件名一致 |
+| **Workbuddy** | 将备份目录 `skills/<name>/` 下的全部文件完整复制到 `~/.workbuddy/skills/<name>/`，保持目录结构与文件名一致。安装后执行 `/reload-plugins` 生效 |
 | **其他编辑器** | 复制到该编辑器约定的 skills 目录；无统一目录时回退到 `~/.qoder/skills/<name>/` |
 
 > 安装的本质：把 `skills/<name>/` 备份**整目录复制**到环境的 skills 目录。备份是单一事实来源，必须包含 manifest `files` 列出的所有文件。
