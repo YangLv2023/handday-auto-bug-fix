@@ -85,10 +85,10 @@ handday-auto-bug-fix/
 ### 方式一：npm 安装（推荐）
 
 
-**一键安装**（推荐，无需全局安装）：
+**一键安装/升级**（推荐，无需全局安装，始终拉取最新版）：
 
 ```powershell
-npx @handday-neil/auto-bug-fix install
+npx @handday-neil/auto-bug-fix@latest install
 ```
 
 **全局安装**：
@@ -105,12 +105,6 @@ handday-auto-bug-fix install
 # macOS / Linux
 npm install -g @handday-neil/auto-bug-fix
 handday-auto-bug-fix install
-```
-
-**升级到最新版**：
-
-```powershell
-npx @handday-neil/auto-bug-fix@latest install
 ```
 
 ---

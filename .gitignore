@@ -1,3 +1,6 @@
 *.tgz
 node_modules/
 .idea/
+
+# 发布脚本（含敏感操作，禁止提交）
+publish.ps1
