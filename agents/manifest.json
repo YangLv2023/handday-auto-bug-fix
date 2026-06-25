@@ -15,6 +15,14 @@
       "templatePath": "agents/senior-java-expert.md",
       "required": true,
       "usedInSteps": ["Step 2 分派", "Step 3.2 后端排查", "Step 5 后端修复"]
+    },
+    {
+      "name": "tencent-cloud-troubleshooter",
+      "role": "腾讯云日志专家",
+      "templatePath": "agents/tencent-cloud-troubleshooter.md",
+      "required": true,
+      "usedInSteps": ["Step 1.5 生产日志抓取（可选）"],
+      "note": "用于生产环境日志检索与APM链路追踪，当工单中存在traceId或明显异常信息时启用"
     }
   ],
   "requiredSkills": [
@@ -26,6 +34,26 @@
       "files": ["SKILL.md", "api-reference.md"],
       "required": true,
       "usedInSteps": ["Step 1.2 工单信息采集"]
+    },
+    {
+      "name": "tccli-setup",
+      "role": "TCCLI安装与配置引导",
+      "type": "user",
+      "templatePath": "skills/tccli-setup/",
+      "files": ["SKILL.md", "reference.md"],
+      "required": true,
+      "usedInSteps": ["Step 0 环境初始化（TCCLI前置）"],
+      "note": "tencent-cloud-troubleshooter 依赖TCCLI环境，未安装时引导用户使用此技能"
+    },
+    {
+      "name": "tccli-log-query",
+      "role": "TCCLI日志检索与链路查询",
+      "type": "user",
+      "templatePath": "skills/tccli-log-query/",
+      "files": ["SKILL.md", "api-reference.md"],
+      "required": true,
+      "usedInSteps": ["Step 1.5 生产日志抓取（可选）"],
+      "note": "tencent-cloud-troubleshooter 使用此技能执行CLS日志检索和APM链路查询"
     },
     {
       "name": "code-review",
@@ -55,10 +83,25 @@
       "source": "present",
       "checkedAt": "2026-06-08"
     },
+    "tencent-cloud-troubleshooter": {
+      "present": false,
+      "source": "template",
+      "checkedAt": ""
+    },
     "handday-workorder": {
       "present": true,
       "source": "present",
       "checkedAt": "2026-06-08"
+    },
+    "tccli-setup": {
+      "present": false,
+      "source": "template",
+      "checkedAt": ""
+    },
+    "tccli-log-query": {
+      "present": false,
+      "source": "template",
+      "checkedAt": ""
     },
     "code-review": {
       "present": true,

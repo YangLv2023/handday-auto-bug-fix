@@ -20,6 +20,7 @@ const SKILL_FILES = [
 const AGENTS_FILES = [
   path.join('agents', 'frontend-bug-fixer.md'),
   path.join('agents', 'senior-java-expert.md'),
+  path.join('agents', 'tencent-cloud-troubleshooter.md'),
   path.join('agents', 'manifest.json'),
 ];
 
@@ -28,7 +29,23 @@ const SUB_SKILL_WORKORDER_FILES = [
   path.join('skills', 'handday-workorder', 'api-reference.md'),
 ];
 
-const ALL_FILES = [...SKILL_FILES, ...AGENTS_FILES, ...SUB_SKILL_WORKORDER_FILES];
+const SUB_SKILL_TCCLI_SETUP_FILES = [
+  path.join('skills', 'tccli-setup', 'SKILL.md'),
+  path.join('skills', 'tccli-setup', 'reference.md'),
+];
+
+const SUB_SKILL_TCCLI_LOG_QUERY_FILES = [
+  path.join('skills', 'tccli-log-query', 'SKILL.md'),
+  path.join('skills', 'tccli-log-query', 'api-reference.md'),
+];
+
+const ALL_FILES = [
+  ...SKILL_FILES,
+  ...AGENTS_FILES,
+  ...SUB_SKILL_WORKORDER_FILES,
+  ...SUB_SKILL_TCCLI_SETUP_FILES,
+  ...SUB_SKILL_TCCLI_LOG_QUERY_FILES,
+];
 
 /** 获取包安装位置（即本文件所在目录） */
 function getSourceDir() {

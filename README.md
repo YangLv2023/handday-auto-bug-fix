@@ -9,6 +9,7 @@
 - **PM（主 Agent）**：流程编排、任务分配、协调各 Agent、最终汇报
 - **前端专家（`frontend-bug-fixer` subagent）**：页面定位、接口追踪、前端问题分析与修复
 - **后端专家（`senior-java-expert` subagent）**：Java 代码定位、根因分析、修复实施
+- **腾讯云日志专家（`tencent-cloud-troubleshooter` subagent）**：生产环境 CLS 日志检索、APM 链路追踪、根因诊断（可选启用）
 - **工单采集（`handday-workorder` 子 Skill）**：自动从 handday OS 平台采集工单信息
 
 ## 核心功能
@@ -17,6 +18,8 @@
 |------|------|
 | 多来源 Bug 采集 | 支持工单（GD编号）、禅道 Bug 链接、用户文字/截图描述 |
 | 智能归属判定 | 自动判断前端 / 后端 / 接口联调问题，精准分派 |
+| 生产日志抓取（可选） | 当工单中存在 traceId 或明显异常信息时，自动决策是否通过腾讯云日志专家进行 CLS 日志检索和 APM 链路追踪 |
+| 业务异常分析 | 当日志诊断确认为业务异常时，协调前后端专家定位业务逻辑，输出业务异常解释报告 |
 | 多 Agent 协作排查 | 前后端专家可多轮交互，直到根因明确 |
 | 自动修复实施 | 用户确认后自动执行代码修改 + 编译验证 |
 | 代码审查 | 修复后自动调用 `code-review` 进行代码审查 |
@@ -25,7 +28,7 @@
 ## 工作流程
 
 ```
-用户输入 Bug → 环境初始化 → 信息采集 → 分派分析 → 协作排查 → 汇报方案 → 用户确认 → 修复实施 → 代码审查
+用户输入 Bug → 环境初始化 → 信息采集 → [可选]生产日志抓取 → 分派分析 → 协作排查 → 汇报方案 → 用户确认 → 修复实施 → 代码审查
 ```
 
 ## 目录结构
@@ -41,11 +44,18 @@ handday-auto-bug-fix/
 ├── agents/                               # Subagent 模板（备份）
 │   ├── manifest.json                     # 依赖清单 & 初始化状态
 │   ├── frontend-bug-fixer.md             # 前端专家 subagent 配置
-│   └── senior-java-expert.md             # 后端专家 subagent 配置
+│   ├── senior-java-expert.md             # 后端专家 subagent 配置
+│   └── tencent-cloud-troubleshooter.md   # 腾讯云日志专家 subagent 配置
 └── skills/                               # 子 Skill 模板（备份）
-    └── handday-workorder/
-        ├── SKILL.md                      # 工单查询 Skill 定义
-        └── api-reference.md              # handday OS API 参考文档
+    ├── handday-workorder/
+    │   ├── SKILL.md                      # 工单查询 Skill 定义
+    │   └── api-reference.md              # handday OS API 参考文档
+    ├── tccli-setup/
+    │   ├── SKILL.md                      # TCCLI 安装配置引导 Skill
+    │   └── reference.md                  # TCCLI 详细参考文档
+    └── tccli-log-query/
+        ├── SKILL.md                      # TCCLI 日志检索与链路查询 Skill
+        └── api-reference.md              # CLS/APM API 参考文档
 ```
 
 ## 前置条件
@@ -62,6 +72,12 @@ handday-auto-bug-fix/
   ```bash
   npm install -g @colbymchenry/codegraph
   ```
+- **TCCLI**（腾讯云命令行工具）：生产日志抓取功能依赖，可选安装
+  ```bash
+  pip install tccli
+  tccli auth login
+  ```
+  > 未安装 TCCLI 不影响主流程，仅无法使用可选的生产日志抓取功能。安装后使用 `/tccli-setup` 技能完成配置。
 - 项目级 `.qoder/rules/` 中配置 CodeGraph 使用规则
 
 ## 安装
@@ -149,9 +165,11 @@ bug、报错、异常、fix、修复、错误、问题排查、堆栈、500、NP
 
 Skill 首次运行时会自动执行 **Step 0 环境初始化**：
 1. 读取 `agents/manifest.json` 获取依赖清单
-2. 检查 `frontend-bug-fixer` 和 `senior-java-expert` 两个 subagent 是否已存在，缺失则自动创建
-3. 检查 `handday-workorder` 子 Skill 是否已存在，缺失则自动从备份安装
+2. 检查 `frontend-bug-fixer`、`senior-java-expert`、`tencent-cloud-troubleshooter` 三个 subagent 是否已存在，缺失则自动创建
+3. 检查 `handday-workorder`、`tccli-setup`、`tccli-log-query` 三个子 Skill 是否已存在，缺失则自动从备份安装
 4. `code-review` 为 Qoder 内置 Skill，无需安装
+
+> **TCCLI 工具说明**：`tccli-setup` 和 `tccli-log-query` 安装的是技能配置文件，TCCLI 命令行工具本身的安装和认证配置在运行时由 `tencent-cloud-troubleshooter` 检查。TCCLI 未安装不阻塞主流程，仅影响可选的生产日志抓取步骤。
 
 ## 使用方式
 
@@ -185,7 +203,10 @@ Skill 会在检测到以下关键词时自动激活：
 |------|------|------|---------|
 | `frontend-bug-fixer` | Subagent | 前端问题排查与修复 | 自动从 `agents/` 模板创建 |
 | `senior-java-expert` | Subagent | 后端 Java 代码排查与修复 | 自动从 `agents/` 模板创建 |
+| `tencent-cloud-troubleshooter` | Subagent | 生产环境日志检索与 APM 链路追踪（可选启用） | 自动从 `agents/` 模板创建 |
 | `handday-workorder` | 子 Skill | 工单信息采集（浏览器自动化） | 自动从 `skills/` 备份安装 |
+| `tccli-setup` | 子 Skill | TCCLI 安装与配置引导 | 自动从 `skills/` 备份安装 |
+| `tccli-log-query` | 子 Skill | CLS 日志检索与 APM 链路查询 | 自动从 `skills/` 备份安装 |
 | `code-review` | 内置 Skill | 修复后代码审查 | Qoder 自带，无需安装 |
 
 依赖的安装状态记录在 `agents/manifest.json` 的 `initStatus` 字段中，已安装的依赖不会重复安装。
