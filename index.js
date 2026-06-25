@@ -47,12 +47,17 @@ const SUB_SKILL_TCCLI_LOG_QUERY_FILES = [
   path.join('skills', 'tccli-log-query', 'api-reference.md'),
 ];
 
+const SUB_SKILL_CHROME_DEVTOOLS_FILES = [
+  path.join('skills', 'chrome-devtools', 'SKILL.md'),
+];
+
 const ALL_FILES = [
   ...SKILL_FILES,
   ...AGENTS_FILES,
   ...SUB_SKILL_WORKORDER_FILES,
   ...SUB_SKILL_TCCLI_SETUP_FILES,
   ...SUB_SKILL_TCCLI_LOG_QUERY_FILES,
+  ...SUB_SKILL_CHROME_DEVTOOLS_FILES,
 ];
 
 // subagent 模板文件（用于 workbuddy 直接安装到 agents 目录）
@@ -67,6 +72,7 @@ const SUB_SKILL_DIRS = [
   { name: 'handday-workorder',  files: SUB_SKILL_WORKORDER_FILES },
   { name: 'tccli-setup',        files: SUB_SKILL_TCCLI_SETUP_FILES },
   { name: 'tccli-log-query',    files: SUB_SKILL_TCCLI_LOG_QUERY_FILES },
+  { name: 'chrome-devtools',    files: SUB_SKILL_CHROME_DEVTOOLS_FILES },
 ];
 
 /** 获取包安装位置（即本文件所在目录） */

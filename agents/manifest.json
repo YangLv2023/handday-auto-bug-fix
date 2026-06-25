@@ -36,6 +36,16 @@
       "usedInSteps": ["Step 1.2 工单信息采集"]
     },
     {
+      "name": "chrome-devtools",
+      "role": "Chrome DevTools 浏览器自动化（工单采集前置依赖）",
+      "type": "user",
+      "templatePath": "skills/chrome-devtools/",
+      "files": ["SKILL.md"],
+      "required": true,
+      "usedInSteps": ["Step 0 环境初始化", "Step 1.2 工单信息采集"],
+      "note": "frontend-bug-fixer 和 handday-workorder 依赖此 skill 进行浏览器自动化操作"
+    },
+    {
       "name": "tccli-setup",
       "role": "TCCLI安装与配置引导",
       "type": "user",
@@ -95,6 +105,11 @@
       "checkedAt": "2026-06-08"
     },
     "tencent-cloud-troubleshooter": {
+      "present": false,
+      "source": "template",
+      "checkedAt": ""
+    },
+    "chrome-devtools": {
       "present": false,
       "source": "template",
       "checkedAt": ""

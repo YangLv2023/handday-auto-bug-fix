@@ -170,21 +170,16 @@ description: 全自动Bug诊断与修复编排器。采用多Agent协作模式�
 
 1. **PM 使用 Bash 工具**检查当前工作目录是否存在上述任意标志性文件/目录
 2. **校验通过** → 继续执行 Step 0
-3. **校验未通过** → 暂停流程，向用户询问：
+3. **校验未通过** → 暂停流程，让用户自行填写代码项目所在目录的完整路径：
 
 ```
-⚠️ 当前工作目录下未检测到有效的代码项目。
-
-请提供代码项目所在目录的完整路径，例如：
-  - E:\workspace\handday-all（后端 Java 项目）
-  - E:\workspace\handday-web（前端项目）
-  - 或其他自定义代码目录
+⚠️ 当前工作目录下未检测到有效的代码项目，请提供代码项目所在目录的完整路径。
 
 提供后我将切换到对应目录继续排查流程。
 ```
 
-4. **用户提供路径后** → 使用 Bash `Set-Location`（`cd`）切换到用户指定的目录，再次执行校验确认
-5. **校验成功后** → 进入 Step 0 环境初始化
+4. **用户提供路径后** → 使用 Bash `Set-Location`（`cd`）切换到用户指定的目录
+5. **切换完成后** → 进入 Step 0 环境初始化
 
 ### 注意事项
 
@@ -195,9 +190,9 @@ description: 全自动Bug诊断与修复编排器。采用多Agent协作模式�
 
 ---
 
-## Step 0: 环境初始化与依赖检查（subagent + 子 skill，必须最先执行）
+## Step 0: 环境初始化与依赖检查（subagent + 子 skill + 前置 skill，必须最先执行）
 
-> 在执行任何 Bug 排查动作前，PM **必须**先完成本步骤，确保所依赖的 **subagent** 与 **子 skill** 在当前环境就绪。已就绪则跳过安装，**不重复安装**。
+> 在执行任何 Bug 排查动作前，PM **必须**先完成本步骤，确保所依赖的 **subagent**、**子 skill** 以及**前置 skill**（如 `chrome-devtools`）在当前环境就绪。已就绪则跳过安装，**不重复安装**。
 
 ### 0.1 读取依赖清单
 
@@ -219,6 +214,12 @@ description: 全自动Bug诊断与修复编排器。采用多Agent协作模式�
 | `tccli-setup` | TCCLI安装与配置引导 | user（需备份/安装） | `skills/tccli-setup/` |
 | `tccli-log-query` | TCCLI日志检索与链路查询 | user（需备份/安装） | `skills/tccli-log-query/` |
 | `code-review` | 代码审查 | builtin（内置自带） | 无需备份 |
+
+**前置 skill（备份在 `skills/`）**
+
+| 前置 skill | 角色 | 类型 | 备份路径 |
+|------------|------|------|---------|
+| `chrome-devtools` | 浏览器自动化（frontend-bug-fixer 和 handday-workorder 依赖） | user（需备份/安装） | `skills/chrome-devtools/` |
 
 ### 0.2 检查 subagent 是否已存在
 
@@ -248,9 +249,9 @@ description: 全自动Bug诊断与修复编排器。采用多Agent协作模式�
 
 > 创建的本质：把 `agents/` 子目录下的模板**复制/落地**到环境的 agents 目录。模板是单一事实来源（single source of truth）。
 
-### 0.4 检查子 skill 是否已存在
+### 0.4 检查子 skill 与前置 skill 是否已存在
 
-对 `requiredSkills` 中 `type` 为 `user` 的子 skill（如 `handday-workorder`），按优先级检查是否存在同名 skill 目录及其 `SKILL.md`，**同时检查 Qoder 和 Workbuddy 两种环境路径**：
+对 `requiredSkills` 中 `type` 为 `user` 的子 skill 与前置 skill（如 `handday-workorder`、`chrome-devtools`），按优先级检查是否存在同名 skill 目录及其 `SKILL.md`，**同时检查 Qoder 和 Workbuddy 两种环境路径**：
 
 **Qoder 路径**：
 1. 项目级：`<项目根>/.qoder/skills/<name>/SKILL.md`
@@ -265,9 +266,9 @@ description: 全自动Bug诊断与修复编排器。采用多Agent协作模式�
 
 > **Workbuddy 说明**：若通过 npm 安装器安装到 Workbuddy，子 skill 已在安装时直接复制到 `~/.workbuddy/skills/<name>/`，此处检查应直接命中。
 
-### 0.5 子 skill 缺失时从备份自动安装
+### 0.5 子 skill / 前置 skill 缺失时从备份自动安装
 
-若某 `user` 类型子 skill 以上四个位置都不存在，则从本 skill 的 `skills/<name>/` 备份安装：
+若某 `user` 类型子 skill 或前置 skill 以上四个位置都不存在，则从本 skill 的 `skills/<name>/` 备份安装：
 
 | 环境 | 安装方式 |
 |------|----------|
@@ -285,6 +286,7 @@ description: 全自动Bug诊断与修复编排器。采用多Agent协作模式�
 "frontend-bug-fixer": { "present": true, "source": "created",   "checkedAt": "<时间>" },
 "senior-java-expert": { "present": true, "source": "created",   "checkedAt": "<时间>" },
 "tencent-cloud-troubleshooter": { "present": true, "source": "created", "checkedAt": "<时间>" },
+"chrome-devtools":    { "present": true, "source": "installed", "checkedAt": "<时间>" },
 "handday-workorder":  { "present": true, "source": "installed", "checkedAt": "<时间>" },
 "tccli-setup":        { "present": true, "source": "installed", "checkedAt": "<时间>" },
 "tccli-log-query":    { "present": true, "source": "installed", "checkedAt": "<时间>" },
@@ -296,7 +298,7 @@ description: 全自动Bug诊断与修复编排器。采用多Agent协作模式�
 
 ### 0.7 校验通过后进入主流程
 
-仅当所有 `required:true` 的 subagent 与子 skill 均就绪（即配置文件/备份已安装到位），方可进入 Step 1。若某必需依赖创建/安装失败，暂停并提示用户手动处理后再继续。
+仅当所有 `required:true` 的 subagent、子 skill 与前置 skill 均就绪（即配置文件/备份已安装到位），方可进入 Step 1。若某必需依赖创建/安装失败，暂停并提示用户手动处理后再继续。
 
 > **TCCLI 工具说明**：`tccli-setup` 和 `tccli-log-query` 子 skill 安装的是**技能配置文件**，而非 TCCLI 命令行工具本身。TCCLI 的实际安装和认证配置在 Step 1.5 日志抓取时由 `tencent-cloud-troubleshooter` 运行时检查，未就绪时引导用户使用 `/tccli-setup` 技能完成安装。因此 TCCLI 未安装**不阻塞**主流程启动，仅影响可选的日志抓取步骤。
 
