@@ -74,6 +74,38 @@ ls ~/.tccli/default.credential
 
 > **关键原则**：先删后登录，确保凭据文件完全由新 token 写入，杜绝写入不全问题。
 
+### Step 1.6: SecretId 读取 Bug 绕过方案（自动执行）
+
+> **TCCLI 已知 Bug**：浏览器授权登录成功后，`default.credential` 文件已正确写入密钥信息，但后续 tccli 命令读取凭据文件时可能失败，报「SecretId 不存在，请输入正确的密钥」。这是 TCCLI 自身的凭据读取 Bug，非用户配置问题。
+>
+> **触发条件**：`tccli auth login` 登录成功 + 凭据文件存在 + 命令执行报 SecretId 不存在/缺失错误。
+>
+> **绕过方案**：从 `default.credential` 文件中提取密钥信息，通过命令参数直接传递，绕过凭据文件读取环节。后续会话中所有 tccli 命令均采用此方式。
+
+**① 从凭据文件提取密钥**：
+
+```powershell
+# Windows
+$cred = Get-Content "$env:USERPROFILE\.tccli\default.credential" | ConvertFrom-Json
+$secretId = $cred.secretId
+$secretKey = $cred.secretKey
+$token = $cred.token
+# Linux/macOS
+secretId=$(python3 -c "import json; print(json.load(open('$HOME/.tccli/default.credential'))['secretId'])")
+secretKey=$(python3 -c "import json; print(json.load(open('$HOME/.tccli/default.credential'))['secretKey'])")
+token=$(python3 -c "import json; print(json.load(open('$HOME/.tccli/default.credential'))['token'])")
+```
+
+**② 后续所有命令带密钥参数**：
+
+```powershell
+$env:PYTHONUTF8="1"; tccli cls SearchLog --cli-unfold-argument `
+    --secretId $secretId ` --secretKey $secretKey ` --token $token `
+    --region ap-shanghai ` --TopicId <TopicId> ` --From <From> --To <To> --QueryString 'traceId:xxx'
+```
+
+> **关键规则**：触发 Bug 后当前会话所有 tccli 命令必须带 `--secretId`/`--secretKey`/`--token` 参数，三参数缺一不可（token 为空传 `--token ""`）。
+
 ### Step 2: 问题信息收集
 
 从用户提供的信息中提取查询关键要素：
@@ -266,6 +298,7 @@ $env:PYTHONUTF8="1"; tccli apm DescribeGeneralSpanList --cli-unfold-argument `
 - 所有结论基于真实查询数据，附证据引用
 - 环境未就绪时引导用户使用 /tccli-setup 技能，不自行安装配置
 - **认证失败时自动执行 Token 失效重认证流程**（删除旧凭据文件 → 重新登录 → 验证 → 重试），不得仅提示用户手动处理
+- **登录成功但报 SecretId 不存在时自动执行 Bug 绕过方案**（从 `default.credential` 提取密钥 → 后续命令带 `--secretId`/`--secretKey`/`--token` 参数），不得仅提示用户手动处理
 - Windows环境下每条tccli命令前设置PYTHONUTF8编码
 - 缺少InstanceId等前置信息时，先执行只读查询获取，再执行核心查询
 

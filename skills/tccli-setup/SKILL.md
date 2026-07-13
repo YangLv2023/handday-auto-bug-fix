@@ -373,6 +373,54 @@ tccli cbs DescribeDisks help --detail
 | 浏览器登录未自动打开 | 引导用户手动复制终端打印的登录链接到浏览器 |
 | 无浏览器环境 | 引导使用 `tccli auth login --browser no`，在另一台机器完成登录 |
 | 登录凭证过期/失效 | **必须先删除旧凭据文件，再重新登录**（见下方「Token 失效重认证流程」） |
+| 登录成功但命令报 SecretId 不存在 | **TCCLI 凭据读取 Bug**：登录成功 + 凭据文件存在 + 命令报 SecretId 不存在。执行「SecretId 读取 Bug 绕过方案」（见下方） |
+
+---
+
+## SecretId 读取 Bug 绕过方案
+
+> **TCCLI 已知 Bug**：浏览器授权登录（`tccli auth login`）成功后，`default.credential` 文件已正确写入密钥信息，但后续 tccli 命令读取凭据文件时可能失败，报「SecretId 不存在，请输入正确的密钥」。这是 TCCLI 自身的凭据读取 Bug，非用户配置问题。
+>
+> **触发条件**：`tccli auth login` 登录成功 + 凭据文件存在 + 命令执行报 SecretId 不存在/缺失错误。
+>
+> **绕过方案**：从 `default.credential` 文件中提取密钥信息，通过命令参数直接传递，绕过凭据文件读取环节。
+
+### 步骤一：从凭据文件提取密钥
+
+**Windows (PowerShell)**:
+```powershell
+$cred = Get-Content "$env:USERPROFILE\.tccli\default.credential" | ConvertFrom-Json
+$secretId = $cred.secretId
+$secretKey = $cred.secretKey
+$token = $cred.token
+```
+
+**Linux/macOS**:
+```bash
+secretId=$(python3 -c "import json; print(json.load(open('$HOME/.tccli/default.credential'))['secretId'])")
+secretKey=$(python3 -c "import json; print(json.load(open('$HOME/.tccli/default.credential'))['secretKey'])")
+token=$(python3 -c "import json; print(json.load(open('$HOME/.tccli/default.credential'))['token'])")
+```
+
+### 步骤二：后续所有命令通过参数传递密钥
+
+触发此 Bug 后，**后续会话中所有 tccli 命令**均在命令中追加 `--secretId`、`--secretKey`、`--token` 参数：
+
+```powershell
+# 示例
+tccli cls SearchLog --cli-unfold-argument `
+    --secretId $secretId `
+    --secretKey $secretKey `
+    --token $token `
+    --region ap-shanghai `
+    --TopicId <TopicId> ` --From <From> --To <To> --QueryString 'traceId:xxx'
+```
+
+> **关键规则**：
+> 1. 触发 Bug 后，**当前会话剩余的所有 tccli 命令**都必须带 `--secretId`、`--secretKey`、`--token` 参数
+> 2. 三个参数缺一不可（即使 token 为空也需传递 `--token ""`）
+> 3. 密钥值从 `default.credential` 文件读取，不以明文写在文档中
+> 4. 此方案仅在使用浏览器授权登录后触发 Bug 时启用；正常情况下不需带密钥参数
 
 ---
 
@@ -425,6 +473,7 @@ ls -la ~/.tccli/default.credential
 5. **跨平台适配** — 根据用户操作系统提供对应命令格式
 6. **优先推荐浏览器授权** — 认证配置时优先推荐 `tccli auth login`，无需手动获取 SecretKey；已有密钥的用户可选手动配置
 7. **Token 失效先删后登录** — 认证失败/过期时，必须先删除旧 `default.credential` 文件再执行 `tccli auth login`，防止旧文件干扰导致密钥写入不全
+8. **SecretId 读取 Bug 绕过** — 登录成功后命令报 SecretId 不存在时，从 `default.credential` 提取密钥，后续所有命令带 `--secretId`/`--secretKey`/`--token` 参数绕过凭据读取 Bug
 
 ---
 

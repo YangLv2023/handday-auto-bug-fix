@@ -150,6 +150,55 @@ ls ~/.tccli/default.credential
 
 > **注意**：如环境未就绪，不要自行安装或配置，引导用户使用 `/tccli-setup` 技能。
 
+### SecretId 读取 Bug 绕过方案（自动执行）
+
+> **TCCLI 已知 Bug**：浏览器授权登录成功后，`default.credential` 文件已正确写入密钥信息，但后续 tccli 命令读取凭据文件时可能失败，报「SecretId 不存在，请输入正确的密钥」。这是 TCCLI 自身的凭据读取 Bug，非用户配置问题。
+>
+> **触发条件**：`tccli auth login` 登录成功 + 凭据文件存在 + 命令执行报 SecretId 不存在/缺失错误。
+>
+> **绕过方案**：从 `default.credential` 文件中提取密钥信息，通过命令参数直接传递，绕过凭据文件读取环节。后续会话中所有 tccli 命令均采用此方式。
+
+#### 步骤一：从凭据文件提取密钥
+
+**Windows (PowerShell)**:
+```powershell
+$cred = Get-Content "$env:USERPROFILE\.tccli\default.credential" | ConvertFrom-Json
+$secretId = $cred.secretId
+$secretKey = $cred.secretKey
+$token = $cred.token
+```
+
+**Linux/macOS**:
+```bash
+secretId=$(python3 -c "import json; print(json.load(open('$HOME/.tccli/default.credential'))['secretId'])")
+secretKey=$(python3 -c "import json; print(json.load(open('$HOME/.tccli/default.credential'))['secretKey'])")
+token=$(python3 -c "import json; print(json.load(open('$HOME/.tccli/default.credential'))['token'])")
+```
+
+#### 步骤二：后续所有命令通过参数传递密钥
+
+触发此 Bug 后，**后续会话中所有 tccli 命令**均在命令中追加 `--secretId`、`--secretKey`、`--token` 参数：
+
+```powershell
+# 示例：SearchLog 命令带密钥参数
+$env:PYTHONUTF8="1"; tccli cls SearchLog --cli-unfold-argument `
+    --secretId $secretId `
+    --secretKey $secretKey `
+    --token $token `
+    --region ap-shanghai `
+    --TopicId 797014ec-3f76-471b-abd8-a1bba1ec5cfb `
+    --From <起始时间戳毫秒> `
+    --To <结束时间戳毫秒> `
+    --QueryString 'traceId:<traceId值>' `
+    --Limit 100 --Sort desc
+```
+
+> **关键规则**：
+> 1. 触发 Bug 后，**当前会话剩余的所有 tccli 命令**都必须带 `--secretId`、`--secretKey`、`--token` 参数
+> 2. 三个参数缺一不可（即使 token 为空也需传递 `--token ""`）
+> 3. 密钥值从 `default.credential` 文件读取，不以明文写在 skill 中
+> 4. 此方案仅在使用浏览器授权登录（`tccli auth login`）后触发 Bug 时启用；正常情况下不需带密钥参数
+
 ### Token 失效重认证流程（自动执行）
 
 > **当查询过程中检测到认证失败（AuthFailure、token过期、密钥失效）时，必须自动执行以下流程，不得仅提示用户手动重新登录。**
@@ -185,6 +234,8 @@ ls ~/.tccli/default.credential
 ```
 
 **④ 重试查询**：凭据文件确认后，重新执行之前失败的查询命令。
+
+**⑤ 检测 SecretId 读取 Bug**：如果重试后仍报「SecretId 不存在，请输入正确的密钥」或类似 SecretId 缺失错误，说明触发了 TCCLI 凭据读取 Bug（登录成功但命令无法正确读取凭据文件）。此时进入「SecretId 读取 Bug 绕过方案」（见下方）。
 
 > **关键原则**：旧凭据文件残留的失效 token 会干扰新登录（tccli 可能复用旧文件句柄或部分覆盖），**先删后登录**确保凭据完全由新 token 写入，杜绝写入不全问题。
 
@@ -480,6 +531,7 @@ $env:PYTHONUTF8="1"; tccli cls SearchLog --cli-unfold-argument `
 | 异常场景 | 处理方式 |
 |----------|---------|
 | 认证失败 (AuthFailure) | **自动执行 Token 失效重认证流程**：①删除旧凭据文件 `Remove-Item "$env:USERPROFILE\.tccli\default.credential" -Force`（Linux: `rm -f ~/.tccli/default.credential`）；②重新执行 `tccli auth login`；③验证凭据文件已生成后重试查询 |
+| 登录成功但报 SecretId 不存在 | **TCCLI 凭据读取 Bug**：登录成功 + 凭据文件存在 + 命令报 SecretId 不存在。执行「SecretId 读取 Bug 绕过方案」：从 `default.credential` 提取密钥，后续所有命令带 `--secretId`/`--secretKey`/`--token` 参数 |
 | CLS 查询地域错误 | 生产环境用 `--region ap-shanghai`，测试环境用 `--region ap-chengdu`，确保与 Step 0.5 选择的环境一致 |
 | 返回空结果 | 日志可能过期/未打印，进入下一次查询（计入5次限制），不无限重试 |
 | InstanceId 无效 | 通过 `apm DescribeApmInstances` 只读查询获取正确的 InstanceId |
@@ -504,6 +556,7 @@ $env:PYTHONUTF8="1"; tccli cls SearchLog --cli-unfold-argument `
 10. **按需扩展** — 缺少 InstanceId 等前置信息时，先执行只读查询获取（如 DescribeApmInstances），再执行核心查询
 11. **CLS 环境选择** — 根据 Step 0.5 选择环境：生产查 `hdsaas-log-topic`（`ap-shanghai`），测试查 `dev` 主题（`ap-chengdu`）。不查询其他日志主题
 12. **环境铁律** — ①禁止两边都查，每次只查一个环境；②禁止跳过确认，直接给 traceId 时用户确认前严禁执行任何查询命令；③环境一旦确定不可中途切换
+13. **SecretId 读取 Bug 绕过** — 登录成功后命令报 SecretId 不存在时，从 `default.credential` 提取密钥，后续所有命令带 `--secretId`/`--secretKey`/`--token` 参数绕过凭据读取 Bug
 
 ---
 
