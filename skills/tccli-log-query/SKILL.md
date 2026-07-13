@@ -1,6 +1,6 @@
 ---
 name: tccli-log-query
-description: Query Tencent Cloud CLS logs and APM traces via TCCLI for problem diagnosis. Supports log search (SearchLog), log histogram (DescribeLogHistogram), log context (DescribeLogContext), APM metric data (DescribeGeneralMetricData), OT span list (DescribeGeneralOTSpanList), span list (DescribeGeneralSpanList), and application config (DescribeApmApplicationConfig). Use when debugging exceptions, analyzing production issues, tracing errors by traceId, investigating service crashes, or querying logs from workorder/bug reports. 触发词：查日志、检索日志、日志查询、链路查询、traceId查询、trace追踪、生产问题排查、服务崩溃分析、异常排查、工单问题定位、cls SearchLog、apm查询。
+description: Query Tencent Cloud CLS logs and APM traces via TCCLI for problem diagnosis. Supports both production (ap-shanghai) and test (ap-chengdu) environments. Supports log search (SearchLog), log histogram (DescribeLogHistogram), log context (DescribeLogContext), APM metric data (DescribeGeneralMetricData), OT span list (DescribeGeneralOTSpanList), span list (DescribeGeneralSpanList), and application config (DescribeApmApplicationConfig). Use when debugging exceptions, analyzing production/test issues, tracing errors by traceId, investigating service crashes, or querying logs from workorder/bug reports. 触发词：查日志、检索日志、日志查询、链路查询、traceId查询、trace追踪、生产问题排查、测试环境问题排查、服务崩溃分析、异常排查、工单问题定位、禅道bug排查、cls SearchLog、apm查询。
 ---
 
 # TCCLI 日志检索与链路查询
@@ -31,7 +31,7 @@ description: Query Tencent Cloud CLS logs and APM traces via TCCLI for problem d
 ## 工作流程
 
 ```
-Step 0: 需求澄清 → Step 1: 环境检查 → Step 2: 收集问题线索 → Step 3: 构建查询 → Step 4: 执行查询 → Step 5: 分析结果
+Step 0: 需求澄清 → Step 0.5: 环境选择 → Step 1: 环境检查 → Step 2: 收集问题线索 → Step 3: 构建查询 → Step 4: 执行查询 → Step 5: 分析结果
 ```
 
 ---
@@ -60,7 +60,7 @@ Step 0: 需求澄清 → Step 1: 环境检查 → Step 2: 收集问题线索 →
 > 1. **查询日志** — 通过 CLS 检索日志，获取报错信息、异常堆栈、关键业务日志等有用信息
 > 2. **查询链路** — 通过 APM 查询调用链，分析请求耗时、服务调用关系、Span 详情
 >
-> 如果不确定，建议先查日志获取有用信息，再查链路进行深入分析。请提供 traceId（必填）以便查询。」
+> 如果不确定，建议先查日志获取有用信息，再查链路进行深入分析。请提供 **traceId 或 corpId**（至少一个必填）以便查询。」
 
 ### 澄清后处理
 
@@ -71,7 +71,62 @@ Step 0: 需求澄清 → Step 1: 环境检查 → Step 2: 收集问题线索 →
 | 两者都查 | 先查日志获取信息线索，再查链路进行深入分析 |
 | 仍未明确 | 默认先查询日志（更快速获取问题线索），有需要再查链路 |
 
-> **注意**：无论选择哪种，traceId 都是必填项。若用户未提供 traceId，需在澄清时一并要求。
+> **注意**：无论选择哪种，**traceId 或 corpId 至少提供一个**。traceId 是精确追踪的主键，corpId 是按客户企业范围检索的主键，两者互斥使用：有 traceId 时以 traceId 检索（不需要 corpId），无 traceId 时需提供 corpId。若用户两者都未提供，需在澄清时一并要求。
+
+---
+
+## Step 0.5: 环境选择
+
+> **根据 Bug 来源自动选择查询环境，避免无谓检索。**
+
+### 环境配置
+
+| 配置项 | 生产环境 | 测试环境 |
+|--------|---------|---------|
+| 地域 | `ap-shanghai` | `ap-chengdu`（成都） |
+| 日志集名称 | `hdsaas-log-group` | `hdsaas-log-group` |
+| 日志集 ID | `91b588b7-222b-41f8-b8c0-acedc86f84da` | `1f3fd353-b847-4191-84de-387a40db2e89` |
+| 日志主题名称 | `hdsaas-log-topic` | `dev` |
+| 日志主题 ID (TopicId) | `797014ec-3f76-471b-abd8-a1bba1ec5cfb` | `a73f1503-1abb-4c3d-b53b-ed8f64e7b162` |
+
+### 选择规则
+
+根据 Bug 来源自动判断查询环境：
+
+| Bug 来源 | 识别特征 | 默认环境 | 是否需要向用户确认 |
+|----------|---------|---------|-------------------|
+| **工单** | GD编号 / os.handday.com 链接 | 生产环境（ap-shanghai） | 否，直接查询 |
+| **禅道** | chandao 链接 / 纯数字Bug编号 | 测试环境（ap-chengdu） | 否，直接查询 |
+| **直接提供 traceId** | 用户直接给出 traceId | — | **是，必须确认** |
+
+> **铁律**：当用户直接提供 traceId 而未说明来源时，**必须先向用户确认是生产环境还是测试环境**，再执行查询。避免选错环境导致无谓检索。
+
+### 确认话术
+
+当需要向用户确认环境时：
+
+> 「请问这个 traceId 属于哪个环境？
+> 1. **生产环境** — 上海地域（ap-shanghai），日志主题 hdsaas-log-topic
+> 2. **测试环境** — 成都地域（ap-chengdu），日志主题 dev
+>
+> 请确认后我将执行对应环境的日志检索。」
+
+### 测试环境 TopicId 获取
+
+测试环境的 TopicId 尚未固定为已知值，首次查询前需通过只读命令获取：
+
+```powershell
+# 1. 查询成都区域的日志集列表，找到 hdsaas-log-group 的 LogsetId
+$env:PYTHONUTF8="1"; tccli cls DescribeLogsets --cli-unfold-argument `
+    --region ap-chengdu
+
+# 2. 用上一步获取的 LogsetId 查询日志主题列表，找到 dev 主题的 TopicId
+$env:PYTHONUTF8="1"; tccli cls DescribeTopics --cli-unfold-argument `
+    --region ap-chengdu `
+    --LogsetId <从上一步获取的LogsetId>
+```
+
+> 获取到 TopicId 后，后续查询直接使用，无需重复获取。
 
 ---
 
@@ -112,28 +167,37 @@ ls ~/.tccli/default.credential
 | 信息来源 | 提取要素 | 查询策略 |
 |----------|---------|---------|
 | 异常堆栈 | 异常类型、类名、方法名 | 结合 traceId 检索 CLS 日志 |
-| 工单/Bug描述 | traceId、corpId、报错时间 | 以 traceId 为主键检索 |
-| traceId | 完整 traceId | **必填**，用于 CLS 日志检索和 APM Span 链路查询 |
+| 工单/Bug描述 | traceId、corpId、报错时间 | 有 traceId 用 traceId，无 traceId 用 corpId 检索 |
+| traceId | 完整 traceId | **主检索键之一**，有 traceId 时优先使用，用于 CLS 日志检索和 APM Span 链路查询 |
 | 错误码 | HTTP状态码、业务错误码 | 结合 traceId 过滤检索 |
 | 服务崩溃 | 崩溃时间、服务名、OOM/异常退出 | 结合 traceId 按时间范围检索 |
 
 ### 关键要素清单
 
 构建查询前需确认：
-- **traceId（必填）**：每次 CLS 日志查询和 APM 链路查询都必须带入 traceId
-- **corpId（推荐）**：若有 corpId 则一并带入查询，缩小检索范围
+- **主检索键（traceId 或 corpId，至少一个必填）**：
+  - **有 traceId 时**：以 traceId 为唯一主键检索，**不需要** corpId（traceId 已精确到单次请求）
+  - **无 traceId 但有 corpId 时**：以 corpId 为主键检索，按客户企业范围缩小日志范围
+  - **两者都没有时**：无法检索，需向用户索要
+  - **互斥原则**：traceId 和 corpId 不可同时作为检索条件，有 traceId 就不用 corpId
 - **时间范围**：默认查询15天，最大不超过30天（问题发生的大致时间精确到分钟级最佳）
 - **附加过滤条件**：可根据情况组合使用 `level`、`message`、`throwable` 字段
-- **TopicId（固定）**：CLS 日志查询固定使用 `hdsaas-log-topic`（ID: `797014ec-3f76-471b-abd8-a1bba1ec5cfb`），地域 `ap-shanghai`，所属日志集 `hdsaas-log-group`（ID: `91b588b7-222b-41f8-b8c0-acedc86f84da`）
+- **TopicId（按环境选择）**：根据 Step 0.5 选择的环境确定。
 - **InstanceId**：APM 业务系统 ID（APM 查询必填，需根据实际环境确认）
 
-> **重要**：CLS 日志查询**只查** `hdsaas-log-topic` 主题，不查询其他日志主题。所有 CLS 命令必须加 `--region ap-shanghai`。
+> **重要**：CLS 日志查询的主题和地域根据 Step 0.5 选择的环境确定。生产环境查 `hdsaas-log-topic`（`--region ap-shanghai`），测试环境查 `dev` 主题（`--region ap-chengdu`）。不查询其他日志主题。
+>
+> **APM 链路查询限制**：APM 链路查询（DescribeGeneralSpanList 等）**仅支持 traceId 检索**，不支持 corpId。当只有 corpId 无 traceId 时，仅执行 CLS 日志检索，跳过 APM 链路查询。
 
 ---
 
 ## Step 3: 构建查询
 
 ### 3.1 CLS 日志检索
+
+> **环境参数映射**：以下 CLS 命令示例以生产环境为例。测试环境请替换：
+> - `--region ap-shanghai` → `--region ap-chengdu`
+> - `--TopicId 797014ec-3f76-471b-abd8-a1bba1ec5cfb` → `--TopicId <dev主题TopicId（通过 DescribeTopics 获取）>`
 
 #### SearchLog — 检索日志
 
@@ -149,12 +213,13 @@ $env:PYTHONUTF8="1"; tccli cls SearchLog --cli-unfold-argument `
 ```
 
 **检索语法要求（CQL）**：
-- **traceId（必填）**：`traceId:abc123def456` — 每次查询必须带入 traceId
-- **corpId（推荐）**：`traceId:abc123 AND corpId:123456` — 有则带入缩小范围
+- **主检索键（traceId 或 corpId，至少一个必填，互斥使用）**：
+  - 有 traceId 时：`traceId:abc123def456` — 以 traceId 为唯一主键，**不需要** corpId
+  - 无 traceId 但有 corpId 时：`corpId:123456` — 以 corpId 为主键检索
 - **level**：`traceId:abc123 AND level:ERROR` — 按日志级别过滤
 - **message**：`traceId:abc123 AND message:"空指针异常"` — 按消息内容过滤
 - **throwable**：`traceId:abc123 AND throwable:NullPointerException` — 按异常类型过滤
-- **多条件组合**：`traceId:abc123 AND corpId:123456 AND level:ERROR AND throwable:NullPointerException`
+- **多条件组合**：`traceId:abc123 AND level:ERROR AND throwable:NullPointerException`
 
 > **注意**：查询时间范围默认15天，最大不超过30天。构造 From/To 时间戳时以当前时间为基准向前推算。
 
@@ -292,14 +357,26 @@ $from = $now - 15 * 24 * 60 * 60 * 1000  # 15天前
 >
 > 日志可能因过期失效或未打印而查不到，**查不到是可接受的**，切不可无限重试浪费资源。
 
-#### 查询策略（按优先级递进）
+#### 查询策略（按主检索键分场景）
+
+**场景A：有 traceId 时（以 traceId 为唯一主键，不使用 corpId）**
 
 ```
-第1次：traceId + corpId（若有）+ level:ERROR → 精确检索
-第2次：traceId + corpId（若有）+ level:ERROR + throwable:异常类型 → 加异常类型精确过滤
-第3次：traceId + corpId（若有）→ 放宽 level 条件，查全部级别
-第4次：traceId + corpId（若有）+ message:关键词 → 按消息内容检索
+第1次：traceId + level:ERROR → 精确检索 ERROR 级别日志
+第2次：traceId + level:ERROR + throwable:异常类型 → 加异常类型精确过滤
+第3次：traceId → 放宽 level 条件，查全部级别
+第4次：traceId + message:关键词 → 按消息内容检索
 第5次：traceId → 仅用 traceId 检索，放宽所有附加条件
+```
+
+**场景B：无 traceId 但有 corpId 时（以 corpId 为主键）**
+
+```
+第1次：corpId + level:ERROR → 按客户企业 + ERROR 级别检索
+第2次：corpId + level:ERROR + throwable:异常类型 → 加异常类型精确过滤
+第3次：corpId → 放宽 level 条件，查全部级别
+第4次：corpId + message:关键词 → 按消息内容检索
+第5次：corpId → 仅用 corpId 检索，放宽所有附加条件
 ```
 
 #### 执行规则
@@ -326,8 +403,8 @@ SearchLog 返回 `Context` 字段，透传可获取后续日志（最多1万条�
 ```bash
 # 第二次查询，透传 Context
 $env:PYTHONUTF8="1"; tccli cls SearchLog --cli-unfold-argument `
-    --region ap-shanghai `
-    --TopicId 797014ec-3f76-471b-abd8-a1bba1ec5cfb `
+    --region <环境对应地域> `
+    --TopicId <环境对应TopicId> `
     --From <From> --To <To> `
     --QueryString 'traceId:<traceId值>' --Context <上次返回的Context>
 ```
@@ -371,7 +448,7 @@ $env:PYTHONUTF8="1"; tccli cls SearchLog --cli-unfold-argument `
 | 异常场景 | 处理方式 |
 |----------|---------|
 | 认证失败 (AuthFailure) | 提示用户执行 `tccli auth login` 重新授权 |
-| CLS 查询地域错误 | CLS 日志在 `ap-shanghai`，命令必须加 `--region ap-shanghai` |
+| CLS 查询地域错误 | 生产环境用 `--region ap-shanghai`，测试环境用 `--region ap-chengdu`，确保与 Step 0.5 选择的环境一致 |
 | 返回空结果 | 日志可能过期/未打印，进入下一次查询（计入5次限制），不无限重试 |
 | InstanceId 无效 | 通过 `apm DescribeApmInstances` 只读查询获取正确的 InstanceId |
 | 查询超时 | 缩小时间范围或减少 Limit 值后重试（计入5次限制） |
@@ -385,7 +462,7 @@ $env:PYTHONUTF8="1"; tccli cls SearchLog --cli-unfold-argument `
 
 1. **需求澄清** — 用户需求模糊时必须先要求明确：查日志还是查链路，不可盲目执行
 2. **只读查询** — 执行一切必要的只读查询（不限于7个核心命令），坚决不执行任何增删改操作
-3. **traceId 必填** — 每次 CLS 日志查询和 APM 链路查询都必须带入 traceId，有 corpId 时一并带入
+3. **主检索键必填（traceId 或 corpId，互斥使用）** — 有 traceId 时以 traceId 为唯一主键检索（不需要 corpId），无 traceId 但有 corpId 时以 corpId 为主键检索。APM 链路查询仅支持 traceId，corpId 仅用于 CLS 日志检索
 4. **时间约束** — 默认查询15天范围，最大不超过30天
 5. **重试上限** — 最多5次不同查询尝试，逐步放宽条件，无论成败必须返回结果，**坚决禁止无限循环**
 6. **编码优先** — Windows 下必须设置 PYTHONUTF8 环境变量
@@ -393,7 +470,8 @@ $env:PYTHONUTF8="1"; tccli cls SearchLog --cli-unfold-argument `
 8. **分步定位** — 先用直方图/指标缩小范围，再用日志检索/链路查询精确定位
 9. **环境依赖** — TCCLI 未安装或未配置时，引导用户使用 `/tccli-setup` 技能
 10. **按需扩展** — 缺少 InstanceId 等前置信息时，先执行只读查询获取（如 DescribeApmInstances），再执行核心查询
-11. **CLS 固定目标** — 日志查询只查 `hdsaas-log-topic`（TopicId: `797014ec-3f76-471b-abd8-a1bba1ec5cfb`），地域 `ap-shanghai`，不查询其他日志主题
+11. **CLS 环境选择** — 根据 Step 0.5 选择环境：生产查 `hdsaas-log-topic`（`ap-shanghai`），测试查 `dev` 主题（`ap-chengdu`）。不查询其他日志主题
+12. **环境确认** — 工单来源默认生产，禅道来源默认测试，直接提供 traceId 时必须向用户确认环境
 
 ---
 

@@ -106,6 +106,8 @@ async () => {
 
 **MANDATORY**: When querying a workorder by code, you MUST always fetch BOTH basic info AND replies, AND display all images. NEVER skip any step.
 
+> **corpId 字段重要性**：`corpId`（客户企业编号）是腾讯云日志检索的关键字段。当工单中无 traceId 但有 corpId 时，corpId 是日志检索的唯一主键，**必须**从工单数据中提取并返回。
+
 ### Step 1: Get basic info + reply details (single evaluate_script call)
 
 Use this exact template - it fetches pagelist AND getreportdetails AND extracts all images in ONE call:
@@ -171,6 +173,7 @@ async () => {
       workCode: d.workCode, title: d.title, status: d.statusName,
       questionType: d.questionTypeName, level: d.levelName, priority: d.priorityName,
       progress: d.progress, product: d.productName, module: d.productModuleName,
+      corpId: d.corpId, corpIdName: d.corpIdName,
       customerName: d.customerName, agentName: d.agentName, agentLevel: d.agentActiveLevelName,
       employeeName: d.employeeName, createType: d.createType,
       handUserNames: d.handUserNames ? d.handUserNames.map(u=>u.name) : [],
