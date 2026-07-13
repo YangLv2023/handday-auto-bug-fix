@@ -60,7 +60,7 @@ Step 0: 需求澄清 → Step 0.5: 环境选择 → Step 1: 环境检查 → Ste
 > 1. **查询日志** — 通过 CLS 检索日志，获取报错信息、异常堆栈、关键业务日志等有用信息
 > 2. **查询链路** — 通过 APM 查询调用链，分析请求耗时、服务调用关系、Span 详情
 >
-> 如果不确定，建议先查日志获取有用信息，再查链路进行深入分析。请提供 **traceId 或 corpId**（至少一个必填）以便查询。」
+> 如果不确定，建议先查日志获取有用信息，再查链路进行深入分析。请提供 **traceId**（必填）或 **corpId**（无 traceId 时尽量提供）以便查询。」
 
 ### 澄清后处理
 
@@ -71,7 +71,7 @@ Step 0: 需求澄清 → Step 0.5: 环境选择 → Step 1: 环境检查 → Ste
 | 两者都查 | 先查日志获取信息线索，再查链路进行深入分析 |
 | 仍未明确 | 默认先查询日志（更快速获取问题线索），有需要再查链路 |
 
-> **注意**：无论选择哪种，**traceId 或 corpId 至少提供一个**。traceId 是精确追踪的主键，corpId 是按客户企业范围检索的主键，两者互斥使用：有 traceId 时以 traceId 检索（不需要 corpId），无 traceId 时需提供 corpId。若用户两者都未提供，需在澄清时一并要求。
+> **注意**：无论选择哪种，**traceId 为首选检索键**。有 traceId 时以 traceId 检索（不需要 corpId）；无 traceId 时需尽量获取 corpId 作为补充检索键（corpId 通常需搭配 level、message、throwable 等条件组合检索，不宜单独使用）。若用户两者都未提供，需在澄清时一并要求，尽可能获取 corpId。
 
 ---
 
@@ -110,23 +110,6 @@ Step 0: 需求澄清 → Step 0.5: 环境选择 → Step 1: 环境检查 → Ste
 > 2. **测试环境** — 成都地域（ap-chengdu），日志主题 dev
 >
 > 请确认后我将执行对应环境的日志检索。」
-
-### 测试环境 TopicId 获取
-
-测试环境的 TopicId 尚未固定为已知值，首次查询前需通过只读命令获取：
-
-```powershell
-# 1. 查询成都区域的日志集列表，找到 hdsaas-log-group 的 LogsetId
-$env:PYTHONUTF8="1"; tccli cls DescribeLogsets --cli-unfold-argument `
-    --region ap-chengdu
-
-# 2. 用上一步获取的 LogsetId 查询日志主题列表，找到 dev 主题的 TopicId
-$env:PYTHONUTF8="1"; tccli cls DescribeTopics --cli-unfold-argument `
-    --region ap-chengdu `
-    --LogsetId <从上一步获取的LogsetId>
-```
-
-> 获取到 TopicId 后，后续查询直接使用，无需重复获取。
 
 ---
 
@@ -168,18 +151,18 @@ ls ~/.tccli/default.credential
 |----------|---------|---------|
 | 异常堆栈 | 异常类型、类名、方法名 | 结合 traceId 检索 CLS 日志 |
 | 工单/Bug描述 | traceId、corpId、报错时间 | 有 traceId 用 traceId，无 traceId 用 corpId 检索 |
-| traceId | 完整 traceId | **主检索键之一**，有 traceId 时优先使用，用于 CLS 日志检索和 APM Span 链路查询 |
+| traceId | 完整 traceId | **首选检索键**，有 traceId 时优先使用，用于 CLS 日志检索和 APM Span 链路查询 |
 | 错误码 | HTTP状态码、业务错误码 | 结合 traceId 过滤检索 |
 | 服务崩溃 | 崩溃时间、服务名、OOM/异常退出 | 结合 traceId 按时间范围检索 |
 
 ### 关键要素清单
 
 构建查询前需确认：
-- **主检索键（traceId 或 corpId，至少一个必填）**：
-  - **有 traceId 时**：以 traceId 为唯一主键检索，**不需要** corpId（traceId 已精确到单次请求）
-  - **无 traceId 但有 corpId 时**：以 corpId 为主键检索，按客户企业范围缩小日志范围
-  - **两者都没有时**：无法检索，需向用户索要
-  - **互斥原则**：traceId 和 corpId 不可同时作为检索条件，有 traceId 就不用 corpId
+- **检索键优先级**：
+  - **首选：traceId** — 有 traceId 时以 traceId 为唯一检索键，不需要 corpId（traceId 已精确到单次请求）
+  - **补充：corpId** — 无 traceId 时尽量获取 corpId 作为补充检索键，按客户企业范围缩小日志范围。corpId **不是必须项**，但尽量传入以提高检索精度；已知信息中没有时，主动向用户获取
+  - **corpId 搭配原则**：corpId 通常**不单独使用**，需搭配 `level`、`message`、`throwable`、时间范围等条件组合检索
+  - **两者都没有时**：需向用户索要，优先获取 traceId，其次获取 corpId
 - **时间范围**：默认查询15天，最大不超过30天（问题发生的大致时间精确到分钟级最佳）
 - **附加过滤条件**：可根据情况组合使用 `level`、`message`、`throwable` 字段
 - **TopicId（按环境选择）**：根据 Step 0.5 选择的环境确定。
@@ -197,7 +180,7 @@ ls ~/.tccli/default.credential
 
 > **环境参数映射**：以下 CLS 命令示例以生产环境为例。测试环境请替换：
 > - `--region ap-shanghai` → `--region ap-chengdu`
-> - `--TopicId 797014ec-3f76-471b-abd8-a1bba1ec5cfb` → `--TopicId <dev主题TopicId（通过 DescribeTopics 获取）>`
+> - `--TopicId 797014ec-3f76-471b-abd8-a1bba1ec5cfb` → `--TopicId a73f1503-1abb-4c3d-b53b-ed8f64e7b162`
 
 #### SearchLog — 检索日志
 
@@ -213,9 +196,9 @@ $env:PYTHONUTF8="1"; tccli cls SearchLog --cli-unfold-argument `
 ```
 
 **检索语法要求（CQL）**：
-- **主检索键（traceId 或 corpId，至少一个必填，互斥使用）**：
-  - 有 traceId 时：`traceId:abc123def456` — 以 traceId 为唯一主键，**不需要** corpId
-  - 无 traceId 但有 corpId 时：`corpId:123456` — 以 corpId 为主键检索
+- **检索键（traceId 优先，无 traceId 时用 corpId）**：
+  - 有 traceId 时：`traceId:abc123def456` — 以 traceId 为唯一检索键，不需要 corpId
+  - 无 traceId 但有 corpId 时：`corpId:123456 AND level:ERROR` — corpId 需搭配其他条件组合检索，不宜单独使用
 - **level**：`traceId:abc123 AND level:ERROR` — 按日志级别过滤
 - **message**：`traceId:abc123 AND message:"空指针异常"` — 按消息内容过滤
 - **throwable**：`traceId:abc123 AND throwable:NullPointerException` — 按异常类型过滤
@@ -357,9 +340,9 @@ $from = $now - 15 * 24 * 60 * 60 * 1000  # 15天前
 >
 > 日志可能因过期失效或未打印而查不到，**查不到是可接受的**，切不可无限重试浪费资源。
 
-#### 查询策略（按主检索键分场景）
+#### 查询策略（按检索键分场景）
 
-**场景A：有 traceId 时（以 traceId 为唯一主键，不使用 corpId）**
+**场景A：有 traceId 时（以 traceId 为唯一检索键）**
 
 ```
 第1次：traceId + level:ERROR → 精确检索 ERROR 级别日志
@@ -369,15 +352,17 @@ $from = $now - 15 * 24 * 60 * 60 * 1000  # 15天前
 第5次：traceId → 仅用 traceId 检索，放宽所有附加条件
 ```
 
-**场景B：无 traceId 但有 corpId 时（以 corpId 为主键）**
+**场景B：无 traceId 但有 corpId 时（corpId 为补充检索键，需搭配其他条件）**
 
 ```
 第1次：corpId + level:ERROR → 按客户企业 + ERROR 级别检索
 第2次：corpId + level:ERROR + throwable:异常类型 → 加异常类型精确过滤
-第3次：corpId → 放宽 level 条件，查全部级别
-第4次：corpId + message:关键词 → 按消息内容检索
-第5次：corpId → 仅用 corpId 检索，放宽所有附加条件
+第3次：corpId + message:关键词 → 按消息内容检索
+第4次：corpId → 放宽 level 条件，查全部级别（corpId 单独使用作为最后手段）
+第5次：corpId + 时间范围缩小 → 缩小时间范围到问题发生时段检索
 ```
+
+> **corpId 使用要点**：corpId 通常是缩小客户企业范围的补充条件，不宜单独作为唯一检索项。前几次查询应尽量搭配 level、throwable、message 等条件，最后才放宽到仅用 corpId。
 
 #### 执行规则
 
@@ -462,7 +447,7 @@ $env:PYTHONUTF8="1"; tccli cls SearchLog --cli-unfold-argument `
 
 1. **需求澄清** — 用户需求模糊时必须先要求明确：查日志还是查链路，不可盲目执行
 2. **只读查询** — 执行一切必要的只读查询（不限于7个核心命令），坚决不执行任何增删改操作
-3. **主检索键必填（traceId 或 corpId，互斥使用）** — 有 traceId 时以 traceId 为唯一主键检索（不需要 corpId），无 traceId 但有 corpId 时以 corpId 为主键检索。APM 链路查询仅支持 traceId，corpId 仅用于 CLS 日志检索
+3. **检索键优先级（traceId 优先，corpId 补充）** — 有 traceId 时以 traceId 为唯一检索键（不需要 corpId），无 traceId 时尽量获取 corpId 作为补充检索键（搭配其他条件组合检索，不宜单独使用）。APM 链路查询仅支持 traceId，corpId 仅用于 CLS 日志检索
 4. **时间约束** — 默认查询15天范围，最大不超过30天
 5. **重试上限** — 最多5次不同查询尝试，逐步放宽条件，无论成败必须返回结果，**坚决禁止无限循环**
 6. **编码优先** — Windows 下必须设置 PYTHONUTF8 环境变量

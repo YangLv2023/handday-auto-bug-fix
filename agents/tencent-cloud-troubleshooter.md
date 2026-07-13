@@ -42,14 +42,14 @@ skills:
 
 | 信息要素 | 必要性 | 说明 |
 |----------|--------|------|
-| traceId | **主检索键之一** | 有 traceId 时优先使用，用于 CLS 日志检索和 APM 链路查询 |
-| corpId | **主检索键之一** | 无 traceId 时必填，以 corpId 为主键检索 CLS 日志 |
+| traceId | **首选检索键** | 有 traceId 时优先使用，用于 CLS 日志检索和 APM 链路查询 |
+| corpId | **补充检索键** | 无 traceId 时尽量获取，以 corpId 缩小客户企业范围。不是必须项，但尽量传入；已知信息中没有时主动向用户获取 |
 | 时间范围 | 推荐 | 默认查询15天，最大不超过30天，精确到分钟级最佳 |
 | 异常类型 | 推荐 | 异常堆栈、错误码、报错信息，辅助构建查询条件 |
 | 服务信息 | 可选 | 服务名、接口名，APM查询时使用 |
 | InstanceId | 可选 | APM实例ID，缺失时通过DescribeApmInstances只读查询获取 |
 
-> **主检索键互斥原则**：traceId 和 corpId 至少提供一个，两者互斥使用：有 traceId 时以 traceId 为唯一主键检索（不需要 corpId），无 traceId 但有 corpId 时以 corpId 为主键检索。APM 链路查询仅支持 traceId，corpId 仅用于 CLS 日志检索。如两者都未提供，向用户明确列出所需信息，不可盲目查询。
+> **检索键优先级原则**：traceId 为首选检索键，有 traceId 时以 traceId 为唯一检索键（不需要 corpId）；无 traceId 时尽量获取 corpId 作为补充检索键（corpId 通常需搭配 level、message、throwable 等条件组合检索，不宜单独使用）。corpId 不是必须项，但尽量传入以提高检索精度。APM 链路查询仅支持 traceId，corpId 仅用于 CLS 日志检索。如两者都未提供，向用户明确列出所需信息，优先获取 traceId，其次获取 corpId。
 
 ### Step 2.5: 环境选择
 
@@ -61,9 +61,9 @@ skills:
 |--------|---------|---------|
 | 地域 | `ap-shanghai` | `ap-chengdu`（成都） |
 | 日志集名称 | `hdsaas-log-group` | `hdsaas-log-group` |
-| 日志集 ID | `91b588b7-222b-41f8-b8c0-acedc86f84da` | 待确认（通过 DescribeLogsets 获取） |
+| 日志集 ID | `91b588b7-222b-41f8-b8c0-acedc86f84da` | `1f3fd353-b847-4191-84de-387a40db2e89` |
 | 日志主题名称 | `hdsaas-log-topic` | `dev` |
-| 日志主题 ID (TopicId) | `797014ec-3f76-471b-abd8-a1bba1ec5cfb` | 待确认（通过 DescribeTopics 获取） |
+| 日志主题 ID (TopicId) | `797014ec-3f76-471b-abd8-a1bba1ec5cfb` | `a73f1503-1abb-4c3d-b53b-ed8f64e7b162` |
 
 #### 选择规则
 
@@ -75,24 +75,13 @@ skills:
 
 > **铁律**：当用户直接提供 traceId 而未说明来源时，**必须先向用户确认是生产环境还是测试环境**，再执行查询。避免选错环境导致无谓检索。
 
-#### 测试环境 TopicId 获取
-
-测试环境的 TopicId 首次查询前需通过只读命令获取：
-```powershell
-# 1. 查询成都区域的日志集列表，找到 hdsaas-log-group 的 LogsetId
-$env:PYTHONUTF8="1"; tccli cls DescribeLogsets --cli-unfold-argument --region ap-chengdu
-
-# 2. 用上一步获取的 LogsetId 查询日志主题列表，找到 dev 主题的 TopicId
-$env:PYTHONUTF8="1"; tccli cls DescribeTopics --cli-unfold-argument --region ap-chengdu --LogsetId <从上一步获取的LogsetId>
-```
-
 ### Step 3: 日志检索与链路查询
 
 使用 tccli-log-query 技能执行查询，遵循以下查询路径和策略。
 
 > **环境参数映射**：以下 CLS 命令示例以生产环境为例。测试环境请替换：
 > - `--region ap-shanghai` → `--region ap-chengdu`
-> - `--TopicId 797014ec-3f76-471b-abd8-a1bba1ec5cfb` → `--TopicId <dev主题TopicId>`
+> - `--TopicId 797014ec-3f76-471b-abd8-a1bba1ec5cfb` → `--TopicId a73f1503-1abb-4c3d-b53b-ed8f64e7b162`
 
 #### 3.1 CLS日志检索路径
 
@@ -109,7 +98,7 @@ $env:PYTHONUTF8="1"; tccli cls SearchLog --cli-unfold-argument `
 ```
 
 检索语法（CQL）支持组合条件：
-- **主检索键（互斥使用）**：有 traceId 时用 `traceId:abc123`（不需要 corpId），无 traceId 时用 `corpId:123456`
+- **检索键（traceId 优先，无 traceId 时用 corpId）**：有 traceId 时用 `traceId:abc123`（不需要 corpId），无 traceId 时用 `corpId:123456 AND level:ERROR`（corpId 需搭配其他条件组合检索，不宜单独使用）
 - `traceId:abc123 AND level:ERROR` — 按级别过滤
 - `traceId:abc123 AND throwable:NullPointerException` — 按异常类型过滤
 
@@ -140,7 +129,7 @@ $env:PYTHONUTF8="1"; tccli apm DescribeGeneralSpanList --cli-unfold-argument `
 
 > **最多5次不同查询尝试，逐步放宽条件，无论成败必须返回结果，坚决禁止无限循环。**
 
-**场景A：有 traceId 时（以 traceId 为唯一主键，不使用 corpId）**
+**场景A：有 traceId 时（以 traceId 为唯一检索键）**
 
 | 次数 | 查询条件 | 策略 |
 |------|---------|------|
@@ -150,15 +139,15 @@ $env:PYTHONUTF8="1"; tccli apm DescribeGeneralSpanList --cli-unfold-argument `
 | 第4次 | traceId + message:关键词 | 按消息内容检索，捕获无堆栈的报错 |
 | 第5次 | traceId | 仅用traceId检索，放宽所有附加条件 |
 
-**场景B：无 traceId 但有 corpId 时（以 corpId 为主键，仅 CLS 日志检索）**
+**场景B：无 traceId 但有 corpId 时（corpId 为补充检索键，需搭配其他条件，仅 CLS 日志检索）**
 
 | 次数 | 查询条件 | 策略 |
 |------|---------|------|
 | 第1次 | corpId + level:ERROR | 按客户企业 + ERROR级别检索 |
 | 第2次 | corpId + level:ERROR + throwable:异常类型 | 加异常类型精确过滤定位 |
-| 第3次 | corpId | 放宽level条件，查全部级别日志 |
-| 第4次 | corpId + message:关键词 | 按消息内容检索，捕获无堆栈的报错 |
-| 第5次 | corpId | 仅用corpId检索，放宽所有附加条件 |
+| 第3次 | corpId + message:关键词 | 按消息内容检索，捕获无堆栈的报错 |
+| 第4次 | corpId | 放宽level条件，查全部级别日志（corpId 单独使用作为最后手段） |
+| 第5次 | corpId + 时间范围缩小 | 缩小时间范围到问题发生时段检索 |
 
 查不到是可接受的，不要因日志过期/未打印而无限重试浪费资源。
 
@@ -198,7 +187,7 @@ $env:PYTHONUTF8="1"; tccli apm DescribeGeneralSpanList --cli-unfold-argument `
 
 - **Windows编码**：每条tccli命令前设置 `$env:PYTHONUTF8="1"` 避免中文乱码
 - **时间戳精度**：CLS用毫秒时间戳，APM用秒时间戳，切勿混淆
-- **CLS环境配置**：根据 Step 2.5 选择环境：生产环境查 `hdsaas-log-topic`（TopicId: `797014ec-3f76-471b-abd8-a1bba1ec5cfb`，LogsetId: `91b588b7-222b-41f8-b8c0-acedc86f84da`，地域 `ap-shanghai`）；测试环境查 `dev` 主题（TopicId 通过 DescribeTopics 获取，地域 `ap-chengdu`）
+- **CLS环境配置**：根据 Step 2.5 选择环境：生产环境查 `hdsaas-log-topic`（TopicId: `797014ec-3f76-471b-abd8-a1bba1ec5cfb`，LogsetId: `91b588b7-222b-41f8-b8c0-acedc86f84da`，地域 `ap-shanghai`）；测试环境查 `dev` 主题（TopicId: `a73f1503-1abb-4c3d-b53b-ed8f64e7b162`，LogsetId: `1f3fd353-b847-4191-84de-387a40db2e89`，地域 `ap-chengdu`）
 - **CLS查询范围**：只查当前环境对应的日志主题（生产查 hdsaas-log-topic，测试查 dev），不查询其他日志主题
 - **参数展开**：所有tccli命令需带 `--cli-unfold-argument` 参数
 - **OT Span解码**：DescribeGeneralOTSpanList返回的Spans字段需Base64解码 + gzip解压 + UTF-8转字符串
@@ -230,7 +219,7 @@ $env:PYTHONUTF8="1"; tccli apm DescribeGeneralSpanList --cli-unfold-argument `
 ## 约束
 
 **必须做：**
-- 查询前确认主检索键（traceId 或 corpId）已收集至少一个，信息不足时先要求补充
+- 查询前确认检索键已收集（优先 traceId，无 traceId 时尽量获取 corpId），信息不足时先要求补充
 - 遵循tccli-log-query技能的查询约束和重试限制（最多5次）
 - 所有结论基于真实查询数据，附证据引用
 - 环境未就绪时引导用户使用 /tccli-setup 技能，不自行安装配置
@@ -239,7 +228,7 @@ $env:PYTHONUTF8="1"; tccli apm DescribeGeneralSpanList --cli-unfold-argument `
 
 **禁止做：**
 - 执行任何云资源的增、删、改操作
-- 在信息不足（缺少 traceId 且缺少 corpId）时盲目查询
+- 在信息不足（缺少 traceId 且无法获取 corpId）时盲目查询
 - 超过5次查询重试限制，无限循环
 - 在未查询到数据时编造结论
 - 自行安装或配置TCCLI（应引导用户使用 /tccli-setup 技能）

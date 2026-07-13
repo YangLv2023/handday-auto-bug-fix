@@ -106,7 +106,7 @@ async () => {
 
 **MANDATORY**: When querying a workorder by code, you MUST always fetch BOTH basic info AND replies, AND display all images. NEVER skip any step.
 
-> **corpId 字段重要性**：`corpId`（客户企业编号）是腾讯云日志检索的关键字段。当工单中无 traceId 但有 corpId 时，corpId 是日志检索的唯一主键，**必须**从工单数据中提取并返回。
+> **corpId 字段重要性**：`corpId`（客户企业编号）是腾讯云日志检索的重要补充检索键。当工单中无 traceId 时，corpId 用于缩小客户企业范围的日志检索（通常需搭配 level、message、throwable 等条件组合检索）。**尽量**从工单数据中提取并返回 corpId；已知信息中没有时，主动向用户获取。
 
 ### Step 1: Get basic info + reply details (single evaluate_script call)
 

@@ -321,7 +321,7 @@ PM 接到用户输入后，立即进入信息采集模式：
 直接调用 `/handday-workorder` skill 查询工单，获取：
 - 工单标题、描述、截图
 - 问题类型、优先级
-- **corpId（客户企业编号）** — 必须提取，当日志检索无 traceId 时作为主检索键
+- **corpId（客户企业编号）** — 尽量提取，当日志检索无 traceId 时作为补充检索键（需搭配其他条件组合检索）
 - 回复记录中的补充信息
 
 ### 1.3 禅道Bug采集
@@ -390,9 +390,9 @@ PM 在 Step 1 采集到的 Bug 描述、问题信息、图片、回复中，检�
 |----------|------|------|
 | **traceId** | `sm` 开头的一串码（32位左右），可能跟在"访问失败"等提示后面 | `sm93f1cf4db8c946028e5fbc71caa0a261` |
 | **明显异常信息打印** | 异常堆栈、ERROR日志、错误码、接口报错截图 | `NullPointerException at com.handday...` |
-| **指掌编号（corpId）** | 工单中存在的客户企业编号，无 traceId 时作为日志检索主键 | `corpId: 123456` |
+| **指掌编号（corpId）** | 工单中存在的客户企业编号，无 traceId 时作为补充检索键（尽量获取，需搭配其他条件） | `corpId: 123456` |
 
-> **traceId 与 corpId 互斥原则**：当日志检索时，traceId 和 corpId 是互斥的主检索键——有 traceId 时以 traceId 为唯一主键检索（不需要 corpId），无 traceId 但有 corpId 时以 corpId 为主键检索。工单采集时两者都应提取，但检索时不同时使用。
+> **检索键优先级原则**：traceId 为首选检索键，有 traceId 时以 traceId 为唯一检索键（不需要 corpId）；无 traceId 时尽量获取 corpId 作为补充检索键（corpId 不是必须项，但尽量传入；通常需搭配 level、message、throwable 等条件组合检索，不宜单独使用）。工单采集时两者都应提取，已知信息中没有 corpId 时主动向用户获取。
 
 ### 1.5.1.5 环境选择
 
@@ -428,9 +428,10 @@ PM 根据以下决策树判断是否启用日志抓取：
 
 当决策启用日志抓取时，PM 派发 `tencent-cloud-troubleshooter` subagent，prompt 中必须包含：
 
-1. **主检索键**（traceId 或 corpId，从工单信息中提取，至少一个必填，互斥使用）：
-   - 有 traceId 时：传入 traceId 作为主检索键，不需要 corpId
-   - 无 traceId 但有 corpId 时：传入 corpId 作为主检索键（仅支持 CLS 日志检索，不支持 APM 链路查询）
+1. **检索键**（traceId 优先，无 traceId 时用 corpId，从 Bug 信息中提取）：
+   - 有 traceId 时：传入 traceId 作为检索键，不需要 corpId
+   - 无 traceId 但有 corpId 时：传入 corpId 作为补充检索键（需搭配其他条件组合检索，仅支持 CLS 日志检索，不支持 APM 链路查询）
+   - 无 traceId 且无 corpId 时：主动向用户获取，优先获取 traceId，其次获取 corpId
 2. **异常信息摘要**（已知的异常类型、错误码、报错信息）
 3. **时间范围**（如工单中有提及问题发生时间）
 4. **查询目的**：明确告知日志专家需要获取什么信息（如：确认异常根因、获取完整调用链、查看业务参数流转等）
@@ -441,9 +442,9 @@ PM 根据以下决策树判断是否启用日志抓取：
 请协助查询[生产/测试]环境日志，以下为已知信息：
 - 查询环境: [生产环境(ap-shanghai) / 测试环境(ap-chengdu)]
   （工单来源→生产，禅道来源→测试，直接提供traceId→已向用户确认）
-- 主检索键（互斥使用，有 traceId 用 traceId，无 traceId 用 corpId）：
+- 检索键（traceId 优先，无 traceId 时用 corpId 尽量传入）：
   - traceId: [从Bug信息提取，如有]
-  - corpId: [从Bug信息提取，如无 traceId 则必填]
+  - corpId: [从Bug信息提取，如无 traceId 则尽量获取；已知信息中没有时主动向用户获取]
 - 异常信息: [已知的异常摘要]
 - 时间范围: [如知道问题发生时间则提供，否则默认15天]
 - 查询目的: [明确说明需要获取的信息，如：确认异常根因/获取完整调用链/查看业务参数流转等]
@@ -753,6 +754,6 @@ fix: 采购入库单批量生单时库存数量未校验导致NPE
 6. **链接单号即触发** —— 用户给出工单/禅道链接或单号即可自动识别并执行全流程
 7. **无 Bug 不硬解** —— 排查后未发现问题时，如实反馈，禁止编造修复方案
 8. **修复必出Commit** —— 修复完成后必须整理输出包含问题来源、根因、解决方案的 Git Commit 信息
-9. **日志抓取按需启用** —— 存在traceId、corpId或明显异常信息时，PM自动权衡是否先抓取环境日志辅助定位，不强制不走也不强制走。traceId与corpId互斥：有traceId用traceId（支持CLS+APM），无traceId用corpId（仅CLS）
+9. **日志抓取按需启用** —— 存在traceId、corpId或明显异常信息时，PM自动权衡是否先抓取环境日志辅助定位，不强制不走也不强制走。traceId优先：有traceId用traceId（支持CLS+APM），无traceId用corpId（仅CLS，需搭配其他条件组合检索）
 10. **环境感知** —— 工单来源默认查生产环境日志，禅道来源默认查测试环境日志，直接提供traceId时必须向用户确认环境
 11. **业务异常≠代码Bug** —— 当日志诊断确认为业务规则正常触发的异常时，输出业务解释报告而非强行修代码
