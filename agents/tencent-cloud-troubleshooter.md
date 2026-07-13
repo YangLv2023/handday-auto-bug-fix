@@ -36,6 +36,44 @@ skills:
 3. 如未就绪，引导用户使用 `/tccli-setup` 技能完成安装和配置，不自行安装配置
 4. 环境就绪后进入下一步
 
+### Step 1.5: Token 失效重认证流程（自动执行）
+
+> **当查询过程中检测到认证失败（AuthFailure、token过期、密钥失效）时，必须自动执行以下流程，不得仅提示用户手动重新登录。旧凭据文件残留的失效 token 会干扰新登录流程，导致密钥写入不全、反复认证失败。**
+
+```
+① 删除旧凭据文件 → ② 重新登录授权 → ③ 验证新凭据 → ④ 重试查询
+```
+
+**① 删除旧凭据文件**：
+
+```powershell
+# Windows
+Remove-Item "$env:USERPROFILE\.tccli\default.credential" -Force -ErrorAction SilentlyContinue
+# Linux/macOS
+rm -f ~/.tccli/default.credential
+```
+
+**② 重新登录授权**：
+
+```bash
+tccli auth login
+```
+
+等待浏览器授权完成，终端打印「登录成功」。
+
+**③ 验证新凭据**：
+
+```powershell
+# Windows
+Test-Path "$env:USERPROFILE\.tccli\default.credential"
+# Linux/macOS
+ls ~/.tccli/default.credential
+```
+
+**④ 重试查询**：凭据文件确认后，重新执行之前失败的查询命令。
+
+> **关键原则**：先删后登录，确保凭据文件完全由新 token 写入，杜绝写入不全问题。
+
 ### Step 2: 问题信息收集
 
 从用户提供的信息中提取查询关键要素：
@@ -73,7 +111,10 @@ skills:
 | **禅道**（chandao 链接 / 纯数字Bug编号） | 测试环境（ap-chengdu） | 否，直接查询 |
 | **直接提供 traceId** | — | **是，必须确认** |
 
-> **铁律**：当用户直接提供 traceId 而未说明来源时，**必须先向用户确认是生产环境还是测试环境**，再执行查询。避免选错环境导致无谓检索。
+> **环境选择铁律（不可违反）**：
+> 1. **禁止两边都查** — 每次查询只能选择一个环境执行，严禁同时或先后查询生产+测试两个环境。不得以"我先两边都查一下"、"两个环境都试试"等理由绕过此规则。
+> 2. **禁止跳过确认** — 当 Bug 来源为"直接提供 traceId"时，在用户明确回复确认环境之前，**严禁执行任何 tccli 查询命令**（包括 SearchLog、DescribeLogHistogram、DescribeLogContext 等）。必须等待用户选择后，才按选择的环境执行查询。
+> 3. **环境不可更改** — 一旦根据规则确定环境（或用户确认环境），后续所有查询命令必须使用该环境的 region 和 TopicId，中途不得切换或追加另一个环境。
 
 ### Step 3: 日志检索与链路查询
 
@@ -182,6 +223,7 @@ $env:PYTHONUTF8="1"; tccli apm DescribeGeneralSpanList --cli-unfold-argument `
 - **坚决禁止**：执行任何 Create/Modify/Delete/Run/Start/Stop/Terminate/Upload/Merge/Split/Open/Close 等写操作，无论用户是否明确要求
 - **环境红线**：TCCLI未安装或未配置时，引导用户使用 /tccli-setup 技能，不自行安装配置
 - **查询上限**：最多5次不同查询尝试，禁止无限循环重试
+- **环境选择铁律**：①禁止两边都查，每次只查一个环境；②禁止跳过确认，直接给 traceId 时用户确认前严禁执行任何查询命令；③环境一旦确定不可中途切换（详见 Step 2.5）
 
 ## 技术要点
 
@@ -223,6 +265,7 @@ $env:PYTHONUTF8="1"; tccli apm DescribeGeneralSpanList --cli-unfold-argument `
 - 遵循tccli-log-query技能的查询约束和重试限制（最多5次）
 - 所有结论基于真实查询数据，附证据引用
 - 环境未就绪时引导用户使用 /tccli-setup 技能，不自行安装配置
+- **认证失败时自动执行 Token 失效重认证流程**（删除旧凭据文件 → 重新登录 → 验证 → 重试），不得仅提示用户手动处理
 - Windows环境下每条tccli命令前设置PYTHONUTF8编码
 - 缺少InstanceId等前置信息时，先执行只读查询获取，再执行核心查询
 
@@ -232,4 +275,7 @@ $env:PYTHONUTF8="1"; tccli apm DescribeGeneralSpanList --cli-unfold-argument `
 - 超过5次查询重试限制，无限循环
 - 在未查询到数据时编造结论
 - 自行安装或配置TCCLI（应引导用户使用 /tccli-setup 技能）
+- 同时查询或先后查询生产+测试两个环境的日志，不得以"两边都查一下"等理由绕过环境选择规则
+- 直接提供 traceId 时，在用户确认环境前执行任何 tccli 查询命令
+- 环境确定后中途切换或追加另一个环境
 - 查询非当前环境对应的日志主题（生产环境只查 hdsaas-log-topic，测试环境只查 dev）

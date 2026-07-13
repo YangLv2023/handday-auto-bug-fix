@@ -372,7 +372,47 @@ tccli cbs DescribeDisks help --detail
 | SecretId/Key 无效 | 提示用户检查密钥是否正确，确认未多余空格 |
 | 浏览器登录未自动打开 | 引导用户手动复制终端打印的登录链接到浏览器 |
 | 无浏览器环境 | 引导使用 `tccli auth login --browser no`，在另一台机器完成登录 |
-| 登录凭证过期/失效 | 引导用户重新执行 `tccli auth login` 重新授权 |
+| 登录凭证过期/失效 | **必须先删除旧凭据文件，再重新登录**（见下方「Token 失效重认证流程」） |
+
+---
+
+## Token 失效重认证流程（必须遵守）
+
+> **当检测到 token 过期、认证失败、密钥失效等情况时，必须先删除旧凭据文件，再执行重新登录。禁止在旧凭据文件上直接覆盖登录，否则可能导致密钥信息写入不全、反复认证失败。**
+
+### 步骤一：删除旧凭据文件
+
+**Windows (PowerShell)**:
+```powershell
+Remove-Item "$env:USERPROFILE\.tccli\default.credential" -Force -ErrorAction SilentlyContinue
+```
+
+**Linux/macOS**:
+```bash
+rm -f ~/.tccli/default.credential
+```
+
+### 步骤二：重新登录授权
+
+```bash
+tccli auth login
+```
+
+浏览器自动打开后完成腾讯云登录，等待终端打印「登录成功, 密钥凭证已被写入」。
+
+### 步骤三：验证新凭据
+
+**Windows (PowerShell)**:
+```powershell
+Test-Path "$env:USERPROFILE\.tccli\default.credential"
+```
+
+**Linux/macOS**:
+```bash
+ls -la ~/.tccli/default.credential
+```
+
+> **关键原则**：旧凭据文件残留的失效 token 会干扰新登录流程（tccli 可能复用旧文件句柄或部分覆盖），**先删后登录**可确保凭据文件完全由新 token 写入，杜绝写入不全问题。
 
 ---
 
@@ -384,6 +424,7 @@ tccli cbs DescribeDisks help --detail
 4. **敏感信息保护** — SecretKey 是敏感信息，提醒用户妥善保管；浏览器授权方式不经过命令行传递密钥，更安全
 5. **跨平台适配** — 根据用户操作系统提供对应命令格式
 6. **优先推荐浏览器授权** — 认证配置时优先推荐 `tccli auth login`，无需手动获取 SecretKey；已有密钥的用户可选手动配置
+7. **Token 失效先删后登录** — 认证失败/过期时，必须先删除旧 `default.credential` 文件再执行 `tccli auth login`，防止旧文件干扰导致密钥写入不全
 
 ---
 

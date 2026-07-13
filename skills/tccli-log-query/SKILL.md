@@ -25,6 +25,12 @@ description: Query Tencent Cloud CLS logs and APM traces via TCCLI for problem d
 >   - 任何以 `Search`、`Describe`、`Query`、`Get`、`List` 开头的只读查询命令
 > - **坚决禁止**：执行任何**增、删、改**操作，无论用户是否明确要求，均不得代为执行。包括但不限于 Create/Modify/Delete/Run/Start/Stop/Terminate/Upload/Merge/Split/Open/Close 等写操作
 > - **正确做法**：聚焦于"通过日志和链路数据发现问题线索"，执行一切必要的只读查询来获取问题线索，绝不触碰写操作
+>
+> **环境选择铁律（不可违反）**：
+> - **禁止两边都查**：每次查询只能选择一个环境，严禁同时或先后查询生产+测试两个环境的日志
+> - **禁止跳过确认**：直接提供 traceId 时，用户确认环境前严禁执行任何 tccli 查询命令
+> - **按来源选定**：工单→生产（ap-shanghai），禅道→测试（ap-chengdu），无需确认
+> - 环境一旦确定不可中途切换，详见 Step 0.5
 
 ---
 
@@ -99,7 +105,10 @@ Step 0: 需求澄清 → Step 0.5: 环境选择 → Step 1: 环境检查 → Ste
 | **禅道** | chandao 链接 / 纯数字Bug编号 | 测试环境（ap-chengdu） | 否，直接查询 |
 | **直接提供 traceId** | 用户直接给出 traceId | — | **是，必须确认** |
 
-> **铁律**：当用户直接提供 traceId 而未说明来源时，**必须先向用户确认是生产环境还是测试环境**，再执行查询。避免选错环境导致无谓检索。
+> **环境选择铁律（不可违反）**：
+> 1. **禁止两边都查** — 每次查询只能选择一个环境执行，严禁同时或先后查询生产+测试两个环境。不得以"我先两边都查一下"、"两个环境都试试"等理由绕过此规则。
+> 2. **禁止跳过确认** — 当 Bug 来源为"直接提供 traceId"时，在用户明确回复确认环境之前，**严禁执行任何 tccli 查询命令**（包括 SearchLog、DescribeLogHistogram、DescribeLogContext 等）。必须等待用户选择后，才按选择的环境执行查询。
+> 3. **环境不可更改** — 一旦根据规则确定环境（或用户确认环境），后续所有查询命令必须使用该环境的 region 和 TopicId，中途不得切换或追加另一个环境。
 
 ### 确认话术
 
@@ -137,9 +146,47 @@ ls ~/.tccli/default.credential
 |----------|---------|
 | tccli 已安装且凭据文件存在 | 进入 Step 2 |
 | tccli 未安装或凭据文件不存在 | 提示用户执行 `/tccli-setup` 技能完成安装和配置，配置完成后再继续 |
-| 凭据文件存在但查询报认证错误 | 提示用户执行 `tccli auth login` 重新授权 |
+| 凭据文件存在但查询报认证错误 | **自动执行 Token 失效重认证流程**（见下方） |
 
 > **注意**：如环境未就绪，不要自行安装或配置，引导用户使用 `/tccli-setup` 技能。
+
+### Token 失效重认证流程（自动执行）
+
+> **当查询过程中检测到认证失败（AuthFailure、token过期、密钥失效）时，必须自动执行以下流程，不得仅提示用户手动重新登录。**
+
+```
+① 删除旧凭据文件 → ② 重新登录授权 → ③ 验证新凭据 → ④ 重试查询
+```
+
+**① 删除旧凭据文件**：
+
+```powershell
+# Windows
+Remove-Item "$env:USERPROFILE\.tccli\default.credential" -Force -ErrorAction SilentlyContinue
+# Linux/macOS
+rm -f ~/.tccli/default.credential
+```
+
+**② 重新登录授权**：
+
+```bash
+tccli auth login
+```
+
+等待浏览器授权完成，终端打印「登录成功」。
+
+**③ 验证新凭据**：
+
+```powershell
+# Windows
+Test-Path "$env:USERPROFILE\.tccli\default.credential"
+# Linux/macOS
+ls ~/.tccli/default.credential
+```
+
+**④ 重试查询**：凭据文件确认后，重新执行之前失败的查询命令。
+
+> **关键原则**：旧凭据文件残留的失效 token 会干扰新登录（tccli 可能复用旧文件句柄或部分覆盖），**先删后登录**确保凭据完全由新 token 写入，杜绝写入不全问题。
 
 ---
 
@@ -432,7 +479,7 @@ $env:PYTHONUTF8="1"; tccli cls SearchLog --cli-unfold-argument `
 
 | 异常场景 | 处理方式 |
 |----------|---------|
-| 认证失败 (AuthFailure) | 提示用户执行 `tccli auth login` 重新授权 |
+| 认证失败 (AuthFailure) | **自动执行 Token 失效重认证流程**：①删除旧凭据文件 `Remove-Item "$env:USERPROFILE\.tccli\default.credential" -Force`（Linux: `rm -f ~/.tccli/default.credential`）；②重新执行 `tccli auth login`；③验证凭据文件已生成后重试查询 |
 | CLS 查询地域错误 | 生产环境用 `--region ap-shanghai`，测试环境用 `--region ap-chengdu`，确保与 Step 0.5 选择的环境一致 |
 | 返回空结果 | 日志可能过期/未打印，进入下一次查询（计入5次限制），不无限重试 |
 | InstanceId 无效 | 通过 `apm DescribeApmInstances` 只读查询获取正确的 InstanceId |
@@ -456,7 +503,7 @@ $env:PYTHONUTF8="1"; tccli cls SearchLog --cli-unfold-argument `
 9. **环境依赖** — TCCLI 未安装或未配置时，引导用户使用 `/tccli-setup` 技能
 10. **按需扩展** — 缺少 InstanceId 等前置信息时，先执行只读查询获取（如 DescribeApmInstances），再执行核心查询
 11. **CLS 环境选择** — 根据 Step 0.5 选择环境：生产查 `hdsaas-log-topic`（`ap-shanghai`），测试查 `dev` 主题（`ap-chengdu`）。不查询其他日志主题
-12. **环境确认** — 工单来源默认生产，禅道来源默认测试，直接提供 traceId 时必须向用户确认环境
+12. **环境铁律** — ①禁止两边都查，每次只查一个环境；②禁止跳过确认，直接给 traceId 时用户确认前严禁执行任何查询命令；③环境一旦确定不可中途切换
 
 ---
 
