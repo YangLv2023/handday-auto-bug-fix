@@ -26,11 +26,7 @@ description: Query Tencent Cloud CLS logs and APM traces via TCCLI for problem d
 > - **坚决禁止**：执行任何**增、删、改**操作，无论用户是否明确要求，均不得代为执行。包括但不限于 Create/Modify/Delete/Run/Start/Stop/Terminate/Upload/Merge/Split/Open/Close 等写操作
 > - **正确做法**：聚焦于"通过日志和链路数据发现问题线索"，执行一切必要的只读查询来获取问题线索，绝不触碰写操作
 >
-> **环境选择铁律（不可违反）**：
-> - **禁止两边都查**：每次查询只能选择一个环境，严禁同时或先后查询生产+测试两个环境的日志
-> - **禁止跳过确认**：直接提供 traceId 时，用户确认环境前严禁执行任何 tccli 查询命令
-> - **按来源选定**：工单→生产（ap-shanghai），禅道→测试（ap-chengdu），无需确认
-> - 环境一旦确定不可中途切换，详见 Step 0.5
+> **环境选择铁律**：详见 Step 0.5
 
 ---
 
@@ -146,98 +142,20 @@ ls ~/.tccli/default.credential
 |----------|---------|
 | tccli 已安装且凭据文件存在 | 进入 Step 2 |
 | tccli 未安装或凭据文件不存在 | 提示用户执行 `/tccli-setup` 技能完成安装和配置，配置完成后再继续 |
-| 凭据文件存在但查询报认证错误 | **自动执行 Token 失效重认证流程**（见下方） |
+| 凭据文件存在但查询报认证错误 | → 详见下方「认证异常自动恢复」 |
 
 > **注意**：如环境未就绪，不要自行安装或配置，引导用户使用 `/tccli-setup` 技能。
 
-### SecretId 读取 Bug 绕过方案（自动执行）
+### 认证异常自动恢复
 
-> **TCCLI 已知 Bug**：浏览器授权登录成功后，`default.credential` 文件已正确写入密钥信息，但后续 tccli 命令读取凭据文件时可能失败，报「SecretId 不存在，请输入正确的密钥」。这是 TCCLI 自身的凭据读取 Bug，非用户配置问题。
->
-> **触发条件**：`tccli auth login` 登录成功 + 凭据文件存在 + 命令执行报 SecretId 不存在/缺失错误。
->
-> **绕过方案**：从 `default.credential` 文件中提取密钥信息，通过命令参数直接传递，绕过凭据文件读取环节。后续会话中所有 tccli 命令均采用此方式。
+查询过程中遇到以下认证异常时，**必须自动执行恢复流程**，不得仅提示用户手动处理：
 
-#### 步骤一：从凭据文件提取密钥
+| 异常类型 | 触发条件 | 恢复流程 |
+|---------|---------|---------|
+| **Token 失效** | AuthFailure、token过期、密钥失效 | → 执行 `/tccli-setup` 中的「Token 失效重认证流程」 |
+| **SecretId 读取 Bug** | 登录成功 + 凭据文件存在 + 命令报 SecretId 不存在 | → 执行 `/tccli-setup` 中的「SecretId 读取 Bug 绕过方案」 |
 
-**Windows (PowerShell)**:
-```powershell
-$cred = Get-Content "$env:USERPROFILE\.tccli\default.credential" | ConvertFrom-Json
-$secretId = $cred.secretId
-$secretKey = $cred.secretKey
-$token = $cred.token
-```
-
-**Linux/macOS**:
-```bash
-secretId=$(python3 -c "import json; print(json.load(open('$HOME/.tccli/default.credential'))['secretId'])")
-secretKey=$(python3 -c "import json; print(json.load(open('$HOME/.tccli/default.credential'))['secretKey'])")
-token=$(python3 -c "import json; print(json.load(open('$HOME/.tccli/default.credential'))['token'])")
-```
-
-#### 步骤二：后续所有命令通过参数传递密钥
-
-触发此 Bug 后，**后续会话中所有 tccli 命令**均在命令中追加 `--secretId`、`--secretKey`、`--token` 参数：
-
-```powershell
-# 示例：SearchLog 命令带密钥参数
-$env:PYTHONUTF8="1"; tccli cls SearchLog --cli-unfold-argument `
-    --secretId $secretId `
-    --secretKey $secretKey `
-    --token $token `
-    --region ap-shanghai `
-    --TopicId 797014ec-3f76-471b-abd8-a1bba1ec5cfb `
-    --From <起始时间戳毫秒> `
-    --To <结束时间戳毫秒> `
-    --QueryString 'traceId:<traceId值>' `
-    --Limit 100 --Sort desc
-```
-
-> **关键规则**：
-> 1. 触发 Bug 后，**当前会话剩余的所有 tccli 命令**都必须带 `--secretId`、`--secretKey`、`--token` 参数
-> 2. 三个参数缺一不可（即使 token 为空也需传递 `--token ""`）
-> 3. 密钥值从 `default.credential` 文件读取，不以明文写在 skill 中
-> 4. 此方案仅在使用浏览器授权登录（`tccli auth login`）后触发 Bug 时启用；正常情况下不需带密钥参数
-
-### Token 失效重认证流程（自动执行）
-
-> **当查询过程中检测到认证失败（AuthFailure、token过期、密钥失效）时，必须自动执行以下流程，不得仅提示用户手动重新登录。**
-
-```
-① 删除旧凭据文件 → ② 重新登录授权 → ③ 验证新凭据 → ④ 重试查询
-```
-
-**① 删除旧凭据文件**：
-
-```powershell
-# Windows
-Remove-Item "$env:USERPROFILE\.tccli\default.credential" -Force -ErrorAction SilentlyContinue
-# Linux/macOS
-rm -f ~/.tccli/default.credential
-```
-
-**② 重新登录授权**：
-
-```bash
-tccli auth login
-```
-
-等待浏览器授权完成，终端打印「登录成功」。
-
-**③ 验证新凭据**：
-
-```powershell
-# Windows
-Test-Path "$env:USERPROFILE\.tccli\default.credential"
-# Linux/macOS
-ls ~/.tccli/default.credential
-```
-
-**④ 重试查询**：凭据文件确认后，重新执行之前失败的查询命令。
-
-**⑤ 检测 SecretId 读取 Bug**：如果重试后仍报「SecretId 不存在，请输入正确的密钥」或类似 SecretId 缺失错误，说明触发了 TCCLI 凭据读取 Bug（登录成功但命令无法正确读取凭据文件）。此时进入「SecretId 读取 Bug 绕过方案」（见下方）。
-
-> **关键原则**：旧凭据文件残留的失效 token 会干扰新登录（tccli 可能复用旧文件句柄或部分覆盖），**先删后登录**确保凭据完全由新 token 写入，杜绝写入不全问题。
+> 恢复后重试之前失败的查询命令。
 
 ---
 
@@ -274,13 +192,15 @@ ls ~/.tccli/default.credential
 
 ## Step 3: 构建查询
 
+> **环境参数映射**：以下命令示例以生产环境为例。测试环境替换 `--region ap-chengdu`、`--TopicId a73f1503-1abb-4c3d-b53b-ed8f64e7b162`（详见 Step 0.5）。
+>
+> **Windows 编码**：每条 tccli 命令前设置 `$env:PYTHONUTF8="1"`。
+>
+> **时间戳精度**：CLS 用毫秒，APM 用秒，切勿混淆。
+
 ### 3.1 CLS 日志检索
 
-> **环境参数映射**：以下 CLS 命令示例以生产环境为例。测试环境请替换：
-> - `--region ap-shanghai` → `--region ap-chengdu`
-> - `--TopicId 797014ec-3f76-471b-abd8-a1bba1ec5cfb` → `--TopicId a73f1503-1abb-4c3d-b53b-ed8f64e7b162`
-
-#### SearchLog — 检索日志
+#### SearchLog — 检索日志（核心命令）
 
 ```bash
 $env:PYTHONUTF8="1"; tccli cls SearchLog --cli-unfold-argument `
@@ -289,115 +209,50 @@ $env:PYTHONUTF8="1"; tccli cls SearchLog --cli-unfold-argument `
     --From <起始时间戳毫秒> `
     --To <结束时间戳毫秒> `
     --QueryString 'traceId:<traceId值>' `
-    --Limit 100 `
-    --Sort desc
+    --Limit 100 --Sort desc
 ```
 
-**检索语法要求（CQL）**：
-- **检索键（traceId 优先，无 traceId 时用 corpId）**：
-  - 有 traceId 时：`traceId:abc123def456` — 以 traceId 为唯一检索键，不需要 corpId
-  - 无 traceId 但有 corpId 时：`corpId:123456 AND level:ERROR` — corpId 需搭配其他条件组合检索，不宜单独使用
-- **level**：`traceId:abc123 AND level:ERROR` — 按日志级别过滤
-- **message**：`traceId:abc123 AND message:"空指针异常"` — 按消息内容过滤
-- **throwable**：`traceId:abc123 AND throwable:NullPointerException` — 按异常类型过滤
-- **多条件组合**：`traceId:abc123 AND level:ERROR AND throwable:NullPointerException`
+**检索语法（CQL）**：
+- 有 traceId：`traceId:abc123`（唯一检索键，不需要 corpId）
+- 无 traceId 有 corpId：`corpId:123456 AND level:ERROR`（需搭配其他条件，不宜单独使用）
+- 组合过滤：`traceId:abc123 AND level:ERROR AND throwable:NullPointerException`
+- 支持 `level`、`message`、`throwable` 等字段组合
 
-> **注意**：查询时间范围默认15天，最大不超过30天。构造 From/To 时间戳时以当前时间为基准向前推算。
+> 查询时间范围默认15天，最大不超过30天。
 
-#### DescribeLogHistogram — 日志数量直方图
+#### 其他 CLS 命令
 
-用于查看某时间段内日志分布趋势：
+| 命令 | 用途 | 关键参数 |
+|------|------|---------|
+| `DescribeLogHistogram` | 日志分布趋势 | `--Interval`（毫秒）、`--Query`、`--SyntaxRule 1` |
+| `DescribeLogContext` | 日志上下文 | `--BTime`、`--PkgId`、`--PkgLogId`（来自 SearchLog 返回） |
 
-```bash
-$env:PYTHONUTF8="1"; tccli cls DescribeLogHistogram --cli-unfold-argument `
-    --region ap-shanghai `
-    --TopicId 797014ec-3f76-471b-abd8-a1bba1ec5cfb `
-    --From <起始时间戳毫秒> `
-    --To <结束时间戳毫秒> `
-    --Interval 60000 `
-    --Query 'traceId:<traceId值> AND level:ERROR' `
-    --SyntaxRule 1
-```
-
-#### DescribeLogContext — 日志上下文
-
-用于查看某条日志的前后文，定位问题全貌：
-
-```bash
-$env:PYTHONUTF8="1"; tccli cls DescribeLogContext --cli-unfold-argument `
-    --region ap-shanghai `
-    --TopicId 797014ec-3f76-471b-abd8-a1bba1ec5cfb `
-    --BTime '<YYYY-mm-dd HH:MM:SS.FFF>' `
-    --PkgId <包序号> `
-    --PkgLogId <日志序号> `
-    --PrevLogs 10 `
-    --NextLogs 10
-```
-
-> BTime、PkgId、PkgLogId 来自 SearchLog 返回结果中的 `Results` 字段。
+> 详细参数和示例 → 详见 [api-reference.md](api-reference.md)
 
 ### 3.2 APM 链路查询
 
-#### DescribeGeneralSpanList — 按 TraceId 查询调用链
+#### DescribeGeneralSpanList — 按 TraceId 查询调用链（核心命令）
 
 ```bash
 $env:PYTHONUTF8="1"; tccli apm DescribeGeneralSpanList --cli-unfold-argument `
     --InstanceId <APM实例ID> `
     --StartTime <起始时间戳秒> `
     --EndTime <结束时间戳秒> `
-    --Filters.0.Key traceID `
-    --Filters.0.Type = `
-    --Filters.0.Value <traceId值> `
+    --Filters.0.Key traceID --Filters.0.Type = --Filters.0.Value <traceId值> `
     --Limit 100
 ```
 
-#### DescribeGeneralOTSpanList — OT 调用链查询
+#### 其他 APM 命令
 
-```bash
-$env:PYTHONUTF8="1"; tccli apm DescribeGeneralOTSpanList --cli-unfold-argument `
-    --InstanceId <APM实例ID> `
-    --StartTime <起始时间戳秒> `
-    --EndTime <结束时间戳秒> `
-    --Filters.0.Key service.name `
-    --Filters.0.Type = `
-    --Filters.0.Value <服务名> `
-    --Limit 10
-```
+| 命令 | 用途 | 注意事项 |
+|------|------|---------|
+| `DescribeGeneralOTSpanList` | OT 调用链查询 | Spans 字段需 Base64 解码 + gzip 解压 + UTF-8 转字符串 |
+| `DescribeGeneralMetricData` | 指标数据查询 | 常用 ViewName: `service_metric`/`db_metric`；Period: 0=汇总, 1=时间序列 |
+| `DescribeApmApplicationConfig` | 应用配置查询 | 返回探针配置、熔断阈值等 |
 
-> **注意**：DescribeGeneralOTSpanList 返回的 Spans 字段经过 Base64 + gzip 压缩，需解码：
-> 1. Base64 解码
-> 2. gzip 解压
-> 3. UTF-8 转字符串
+> 详细参数和示例 → 详见 [api-reference.md](api-reference.md)
 
-#### DescribeGeneralMetricData — 指标数据查询
-
-```bash
-$env:PYTHONUTF8="1"; tccli apm DescribeGeneralMetricData --cli-unfold-argument `
-    --InstanceId <APM实例ID> `
-    --ViewName service_metric `
-    --Metrics request_count `
-    --Filters.0.Key service.name `
-    --Filters.0.Value <服务名> `
-    --StartTime <起始时间戳秒> `
-    --EndTime <结束时间戳秒> `
-    --Period 1
-```
-
-**常用 ViewName**：`service_metric`（服务监控）、`db_metric`（数据库视图）
-
-**常用 Metrics**：`request_count`（请求数）、`duration_avg`（平均耗时）、`error_rate`（错误率）
-
-**Period**：`0`=汇总统计、`1`=时间序列（按时间切片聚合）
-
-#### DescribeApmApplicationConfig — 查询应用配置
-
-```bash
-$env:PYTHONUTF8="1"; tccli apm DescribeApmApplicationConfig --cli-unfold-argument `
-    --InstanceId <APM实例ID> `
-    --ServiceName <服务名>
-```
-
-> 返回应用探针配置、日志关联、熔断阈值等信息，用于判断应用监控状态。
+> **APM 链路查询限制**：仅支持 traceId 检索，不支持 corpId。当只有 corpId 无 traceId 时，仅执行 CLS 日志检索。
 
 ---
 
@@ -530,13 +385,12 @@ $env:PYTHONUTF8="1"; tccli cls SearchLog --cli-unfold-argument `
 
 | 异常场景 | 处理方式 |
 |----------|---------|
-| 认证失败 (AuthFailure) | **自动执行 Token 失效重认证流程**：①删除旧凭据文件 `Remove-Item "$env:USERPROFILE\.tccli\default.credential" -Force`（Linux: `rm -f ~/.tccli/default.credential`）；②重新执行 `tccli auth login`；③验证凭据文件已生成后重试查询 |
-| 登录成功但报 SecretId 不存在 | **TCCLI 凭据读取 Bug**：登录成功 + 凭据文件存在 + 命令报 SecretId 不存在。执行「SecretId 读取 Bug 绕过方案」：从 `default.credential` 提取密钥，后续所有命令带 `--secretId`/`--secretKey`/`--token` 参数 |
-| CLS 查询地域错误 | 生产环境用 `--region ap-shanghai`，测试环境用 `--region ap-chengdu`，确保与 Step 0.5 选择的环境一致 |
-| 返回空结果 | 日志可能过期/未打印，进入下一次查询（计入5次限制），不无限重试 |
-| InstanceId 无效 | 通过 `apm DescribeApmInstances` 只读查询获取正确的 InstanceId |
+| 认证失败 / SecretId 读取 Bug | → 详见 Step 1「认证异常自动恢复」 |
+| CLS 查询地域错误 | 确保与 Step 0.5 选择的环境一致 |
+| 返回空结果 | 进入下一次查询（计入5次限制），不无限重试 |
+| InstanceId 无效 | 通过 `apm DescribeApmInstances` 只读查询获取 |
 | 查询超时 | 缩小时间范围或减少 Limit 值后重试（计入5次限制） |
-| 5次查询均无结果 | 告知用户日志可能已过期或未打印，返回已尝试的查询条件摘要 |
+| 5次查询均无结果 | 告知用户日志可能已过期或未打印，返回查询条件摘要 |
 | Windows 中文乱码 | 确认已设置 `$env:PYTHONUTF8="1"` |
 | 配额超限 | 降低查询频率，单主题并发不超过15 |
 
@@ -544,19 +398,12 @@ $env:PYTHONUTF8="1"; tccli cls SearchLog --cli-unfold-argument `
 
 ## 关键原则
 
-1. **需求澄清** — 用户需求模糊时必须先要求明确：查日志还是查链路，不可盲目执行
-2. **只读查询** — 执行一切必要的只读查询（不限于7个核心命令），坚决不执行任何增删改操作
-3. **检索键优先级（traceId 优先，corpId 补充）** — 有 traceId 时以 traceId 为唯一检索键（不需要 corpId），无 traceId 时尽量获取 corpId 作为补充检索键（搭配其他条件组合检索，不宜单独使用）。APM 链路查询仅支持 traceId，corpId 仅用于 CLS 日志检索
-4. **时间约束** — 默认查询15天范围，最大不超过30天
-5. **重试上限** — 最多5次不同查询尝试，逐步放宽条件，无论成败必须返回结果，**坚决禁止无限循环**
-6. **编码优先** — Windows 下必须设置 PYTHONUTF8 环境变量
-7. **时间精度** — CLS 用毫秒时间戳，APM 用秒时间戳，切勿混淆
-8. **分步定位** — 先用直方图/指标缩小范围，再用日志检索/链路查询精确定位
-9. **环境依赖** — TCCLI 未安装或未配置时，引导用户使用 `/tccli-setup` 技能
-10. **按需扩展** — 缺少 InstanceId 等前置信息时，先执行只读查询获取（如 DescribeApmInstances），再执行核心查询
-11. **CLS 环境选择** — 根据 Step 0.5 选择环境：生产查 `hdsaas-log-topic`（`ap-shanghai`），测试查 `dev` 主题（`ap-chengdu`）。不查询其他日志主题
-12. **环境铁律** — ①禁止两边都查，每次只查一个环境；②禁止跳过确认，直接给 traceId 时用户确认前严禁执行任何查询命令；③环境一旦确定不可中途切换
-13. **SecretId 读取 Bug 绕过** — 登录成功后命令报 SecretId 不存在时，从 `default.credential` 提取密钥，后续所有命令带 `--secretId`/`--secretKey`/`--token` 参数绕过凭据读取 Bug
+1. **需求澄清** — 用户需求模糊时必须先要求明确：查日志还是查链路（详见 Step 0）
+2. **只读查询** — 执行一切必要的只读查询，坚决不执行任何增删改操作（详见铁律）
+3. **检索键优先级** — traceId 优先，corpId 补充（详见 Step 2）
+4. **环境选择** — 按来源选定环境，禁止两边都查（详见 Step 0.5）
+5. **重试上限** — 最多5次不同查询，禁止无限循环（详见 Step 4）
+6. **环境依赖** — TCCLI 未就绪时引导用户使用 `/tccli-setup` 技能；认证异常自动恢复（详见 Step 1）
 
 ---
 

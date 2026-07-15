@@ -15,15 +15,13 @@ description: 全自动Bug诊断与修复编排器。采用多Agent协作模式�
 | **后端专家** | `senior-java-expert` subagent | Java代码定位、根因分析、修复实施 |
 | **腾讯云日志专家** | `tencent-cloud-troubleshooter` subagent | 生产环境CLS日志检索、APM链路追踪、根因诊断（可选启用） |
 
-> **依赖说明**：
-> - **subagent**：`frontend-bug-fixer`、`senior-java-expert`、`tencent-cloud-troubleshooter`，配置模板随 skill 存放在 `agents/` 子目录。
-> - **子 skill**：`handday-workorder`（用户级，备份在 `skills/` 子目录）、`tccli-setup`（用户级，备份在 `skills/` 子目录）、`tccli-log-query`（用户级，备份在 `skills/` 子目录）、`code-review`（内置自带）。
+> **依赖说明**：subagent 配置模板存放在 `agents/` 子目录，子 skill 备份存放在 `skills/` 子目录。完整依赖清单（含 `requiredSubagents` 和 `requiredSkills`）→ 详见 [agents/manifest.json](agents/manifest.json)。
 >
 > 新环境首次运行时，[Step 0](#step-0-环境初始化与依赖检查subagent--子-skill必须最先执行) 会自动检查并从备份初始化缺失的 subagent / 子 skill，无需手动安装。
 >
-> **安装后须知**：本 skill 安装完成后，`tccli-setup`、`tccli-log-query` 两个子 skill 和 `tencent-cloud-troubleshooter` 子 agent 会随 Step 0 环境初始化自动检查并安装。如环境中已存在同名 skill/agent 则跳过，否则从备份自动安装。
+> **安装后须知**：`tccli-setup`、`tccli-log-query` 子 skill 和 `tencent-cloud-troubleshooter` 子 agent 会随 Step 0 自动检查并安装。已存在则跳过。
 >
-> **多环境支持**：本 skill 同时支持 Qoder（`~/.qoder/`）和 Workbuddy（`~/.workbuddy/`）两种环境。npm 安装器默认同时安装到两个环境，也可通过 `--target qoder` 或 `--target workbuddy` 指定单一目标。Workbuddy 环境下 agents 和子 skill 在安装时直接安装到对应目录（立即可用），Qoder 环境下由 Step 0 运行时自动初始化。Workbuddy 安装后需执行 `/reload-plugins` 生效。
+> **多环境支持**：同时支持 Qoder（`~/.qoder/`）和 Workbuddy（`~/.workbuddy/`）两种环境。npm 安装器默认同时安装到两个环境，也可通过 `--target qoder` 或 `--target workbuddy` 指定单一目标。Workbuddy 安装后需执行 `/reload-plugins` 生效。
 
 ---
 
@@ -196,111 +194,37 @@ description: 全自动Bug诊断与修复编排器。采用多Agent协作模式�
 
 ### 0.1 读取依赖清单
 
-读取 skill 目录下的 `agents/manifest.json`，获取 `requiredSubagents` 与 `requiredSkills` 两份清单。当前依赖：
+读取 skill 目录下的 `agents/manifest.json`，获取 `requiredSubagents` 与 `requiredSkills` 两份清单。
 
-**subagent（备份在 `agents/`）**
+> 完整清单含 3 个 subagent（`frontend-bug-fixer`、`senior-java-expert`、`tencent-cloud-troubleshooter`）和 5 个子 skill/前置 skill（`handday-workorder`、`chrome-devtools`、`tccli-setup`、`tccli-log-query`、`code-review`）。→ 详见 [agents/manifest.json](agents/manifest.json)。
 
-| subagent | 角色 | 模板路径 |
-|----------|------|---------|
-| `frontend-bug-fixer` | 前端专家 | `agents/frontend-bug-fixer.md` |
-| `senior-java-expert` | 后端专家 | `agents/senior-java-expert.md` |
-| `tencent-cloud-troubleshooter` | 腾讯云日志专家 | `agents/tencent-cloud-troubleshooter.md` |
+### 0.2 检查依赖是否已存在
 
-**子 skill（备份在 `skills/`）**
+对每个 subagent 和 `user` 类型子 skill/前置 skill，按优先级检查 Qoder 和 Workbuddy 两种环境路径（项目级 + 用户级）：
 
-| 子 skill | 角色 | 类型 | 备份路径 |
-|----------|------|------|---------|
-| `handday-workorder` | 工单信息采集 | user（需备份/安装） | `skills/handday-workorder/` |
-| `tccli-setup` | TCCLI安装与配置引导 | user（需备份/安装） | `skills/tccli-setup/` |
-| `tccli-log-query` | TCCLI日志检索与链路查询 | user（需备份/安装） | `skills/tccli-log-query/` |
-| `code-review` | 代码审查 | builtin（内置自带） | 无需备份 |
+- **subagent**：`<项目根>/.qoder/agents/` → `~/.qoder/agents/` → `<项目根>/.workbuddy/agents/` → `~/.workbuddy/agents/`
+- **子 skill/前置 skill**：`<项目根>/.qoder/skills/<name>/SKILL.md` → `~/.qoder/skills/<name>/SKILL.md` → `<项目根>/.workbuddy/skills/<name>/SKILL.md` → `~/.workbuddy/skills/<name>/SKILL.md`
+- `builtin` 类型子 skill（如 `code-review`）：内置自带，无需安装
 
-**前置 skill（备份在 `skills/`）**
+任一位置存在即视为**已就绪**，跳过创建/安装。
 
-| 前置 skill | 角色 | 类型 | 备份路径 |
-|------------|------|------|---------|
-| `chrome-devtools` | 浏览器自动化（frontend-bug-fixer 和 handday-workorder 依赖） | user（需备份/安装） | `skills/chrome-devtools/` |
+### 0.3 缺失时按环境自动创建/安装
 
-### 0.2 检查 subagent 是否已存在
+| 环境 | subagent 创建方式 | 子 skill 安装方式 |
+|------|-------------------|------------------|
+| **Qoder** | 调用 `/create-subagent`，以 `agents/<name>.md` 模板写入 `~/.qoder/agents/<name>.md` | 将 `skills/<name>/` 全部文件复制到 `~/.qoder/skills/<name>/` |
+| **Workbuddy** | 模板内容直接复制到 `~/.workbuddy/agents/<name>.md`，后执行 `/reload-plugins` | 将 `skills/<name>/` 全部文件复制到 `~/.workbuddy/skills/<name>/`，后执行 `/reload-plugins` |
+| **其他编辑器** | 写入编辑器约定的 agents 目录，无统一目录时回退到 `~/.qoder/agents/` | 复制到编辑器约定的 skills 目录，无统一目录时回退到 `~/.qoder/skills/` |
 
-对每个 subagent，按优先级检查是否存在同名 `.md` 配置，**同时检查 Qoder 和 Workbuddy 两种环境路径**：
+> 模板和备份是单一事实来源。`agents/` 下的模板复制为 subagent，`skills/<name>/` 下的备份整目录复制为子 skill。
 
-**Qoder 路径**：
-1. 项目级：`<项目根>/.qoder/agents/<name>.md`
-2. 用户级：`~/.qoder/agents/<name>.md`（Windows 为 `C:\Users\<用户>\.qoder\agents\<name>.md`）
+### 0.4 记录初始化状态并校验
 
-**Workbuddy 路径**：
-3. 项目级：`<项目根>/.workbuddy/agents/<name>.md`
-4. 用户级：`~/.workbuddy/agents/<name>.md`（Windows 为 `C:\Users\<用户>\.workbuddy\agents\<name>.md`）
+完成检查/创建/安装后，回写 `agents/manifest.json` 的 `initStatus`（`present`/`source`/`checkedAt`）。下次运行时已 `present:true` 的项直接跳过。
 
-任一位置存在即视为**已就绪**，跳过创建，并在 `manifest.json` 的 `initStatus` 中回写 `present:true, source:"present"`。
+仅当所有 `required:true` 的依赖均就绪，方可进入 Step 1。若某必需依赖创建/安装失败，暂停并提示用户手动处理。
 
-> **Workbuddy 说明**：若通过 npm 安装器安装到 Workbuddy，agents 已在安装时直接复制到 `~/.workbuddy/agents/`，此处检查应直接命中。
-
-### 0.3 subagent 不存在时按环境自动创建
-
-若以上四个位置都不存在，则按当前编辑器环境触发创建流程：
-
-| 环境 | 创建方式 |
-|------|----------|
-| **Qoder** | 调用 `/create-subagent` 命令，并以 `agents/<name>.md` 模板内容作为该 subagent 的配置（frontmatter + system prompt 直接复用模板），写入 `~/.qoder/agents/<name>.md` |
-| **Workbuddy** | 将 `agents/<name>.md` 模板内容直接复制到 `~/.workbuddy/agents/<name>.md`，保持 frontmatter 与正文一致。创建后执行 `/reload-plugins` 生效 |
-| **其他编辑器（如 Cursor/VSCode 等）** | 按该编辑器的 subagent/custom-agent 规范创建：将模板内容写入其约定的 agents 配置目录（无统一目录时，回退写入 `~/.qoder/agents/<name>.md`），保持 frontmatter 与正文一致 |
-
-> 创建的本质：把 `agents/` 子目录下的模板**复制/落地**到环境的 agents 目录。模板是单一事实来源（single source of truth）。
-
-### 0.4 检查子 skill 与前置 skill 是否已存在
-
-对 `requiredSkills` 中 `type` 为 `user` 的子 skill 与前置 skill（如 `handday-workorder`、`chrome-devtools`），按优先级检查是否存在同名 skill 目录及其 `SKILL.md`，**同时检查 Qoder 和 Workbuddy 两种环境路径**：
-
-**Qoder 路径**：
-1. 项目级：`<项目根>/.qoder/skills/<name>/SKILL.md`
-2. 用户级：`~/.qoder/skills/<name>/SKILL.md`（Windows 为 `C:\Users\<用户>\.qoder\skills\<name>\SKILL.md`）
-
-**Workbuddy 路径**：
-3. 项目级：`<项目根>/.workbuddy/skills/<name>/SKILL.md`
-4. 用户级：`~/.workbuddy/skills/<name>/SKILL.md`（Windows 为 `C:\Users\<用户>\.workbuddy\skills\<name>\SKILL.md`）
-
-- 任一位置存在即视为**已就绪**，跳过安装。
-- 对 `type` 为 `builtin` 的子 skill（如 `code-review`）：内置自带，**无需安装**，仅确认其在当前 skill 列表中可调用即可，`initStatus.source` 记为 `builtin`。
-
-> **Workbuddy 说明**：若通过 npm 安装器安装到 Workbuddy，子 skill 已在安装时直接复制到 `~/.workbuddy/skills/<name>/`，此处检查应直接命中。
-
-### 0.5 子 skill / 前置 skill 缺失时从备份自动安装
-
-若某 `user` 类型子 skill 或前置 skill 以上四个位置都不存在，则从本 skill 的 `skills/<name>/` 备份安装：
-
-| 环境 | 安装方式 |
-|------|----------|
-| **Qoder** | 将备份目录 `skills/<name>/` 下的全部文件（见 manifest `files`，如 `SKILL.md`、`api-reference.md`）完整复制到 `~/.qoder/skills/<name>/`，保持目录结构与文件名一致 |
-| **Workbuddy** | 将备份目录 `skills/<name>/` 下的全部文件完整复制到 `~/.workbuddy/skills/<name>/`，保持目录结构与文件名一致。安装后执行 `/reload-plugins` 生效 |
-| **其他编辑器** | 复制到该编辑器约定的 skills 目录；无统一目录时回退到 `~/.qoder/skills/<name>/` |
-
-> 安装的本质：把 `skills/<name>/` 备份**整目录复制**到环境的 skills 目录。备份是单一事实来源，必须包含 manifest `files` 列出的所有文件。
-
-### 0.6 记录初始化状态（避免重复安装）
-
-完成检查/创建/安装后，回写 `agents/manifest.json` 的 `initStatus`：
-
-```json
-"frontend-bug-fixer": { "present": true, "source": "created",   "checkedAt": "<时间>" },
-"senior-java-expert": { "present": true, "source": "created",   "checkedAt": "<时间>" },
-"tencent-cloud-troubleshooter": { "present": true, "source": "created", "checkedAt": "<时间>" },
-"chrome-devtools":    { "present": true, "source": "installed", "checkedAt": "<时间>" },
-"handday-workorder":  { "present": true, "source": "installed", "checkedAt": "<时间>" },
-"tccli-setup":        { "present": true, "source": "installed", "checkedAt": "<时间>" },
-"tccli-log-query":    { "present": true, "source": "installed", "checkedAt": "<时间>" },
-"code-review":        { "present": true, "source": "builtin",   "checkedAt": "<时间>" }
-```
-
-- `source` 取值：`present`（环境已有）/ `created`（subagent 本次新建）/ `installed`（子 skill 本次从备份安装）/ `builtin`（内置自带）/ `template`（仅备份就绪待装）
-- 下次运行先看 `initStatus`：已 `present:true` 的项直接跳过，不再检查与安装
-
-### 0.7 校验通过后进入主流程
-
-仅当所有 `required:true` 的 subagent、子 skill 与前置 skill 均就绪（即配置文件/备份已安装到位），方可进入 Step 1。若某必需依赖创建/安装失败，暂停并提示用户手动处理后再继续。
-
-> **TCCLI 工具说明**：`tccli-setup` 和 `tccli-log-query` 子 skill 安装的是**技能配置文件**，而非 TCCLI 命令行工具本身。TCCLI 的实际安装和认证配置在 Step 1.5 日志抓取时由 `tencent-cloud-troubleshooter` 运行时检查，未就绪时引导用户使用 `/tccli-setup` 技能完成安装。因此 TCCLI 未安装**不阻塞**主流程启动，仅影响可选的日志抓取步骤。
+> **TCCLI 工具说明**：`tccli-setup` 和 `tccli-log-query` 子 skill 安装的是**技能配置文件**，而非 TCCLI 命令行工具本身。TCCLI 的实际安装和认证配置在 Step 1.5 日志抓取时由 `tencent-cloud-troubleshooter` 运行时检查。因此 TCCLI 未安装**不阻塞**主流程启动，仅影响可选的日志抓取步骤。
 
 ---
 
@@ -390,9 +314,9 @@ PM 在 Step 1 采集到的 Bug 描述、问题信息、图片、回复中，检�
 |----------|------|------|
 | **traceId** | `sm` 开头的一串码（32位左右），可能跟在"访问失败"等提示后面 | `sm93f1cf4db8c946028e5fbc71caa0a261` |
 | **明显异常信息打印** | 异常堆栈、ERROR日志、错误码、接口报错截图 | `NullPointerException at com.handday...` |
-| **指掌编号（corpId）** | 工单中存在的客户企业编号，无 traceId 时作为补充检索键（尽量获取，需搭配其他条件） | `corpId: 123456` |
+| **指掌编号（corpId）** | 工单中存在的客户企业编号，无 traceId 时作为补充检索键 | `corpId: 123456` |
 
-> **检索键优先级原则**：traceId 为首选检索键，有 traceId 时以 traceId 为唯一检索键（不需要 corpId）；无 traceId 时尽量获取 corpId 作为补充检索键（corpId 不是必须项，但尽量传入；通常需搭配 level、message、throwable 等条件组合检索，不宜单独使用）。工单采集时两者都应提取，已知信息中没有 corpId 时主动向用户获取。
+> **检索键优先级**：traceId 优先，corpId 补充。→ 详细规则详见 tccli-log-query/SKILL.md Step 2。工单采集时两者都应提取。
 
 ### 1.5.1.5 环境选择
 
@@ -400,14 +324,11 @@ PM 在 Step 1 采集到的 Bug 描述、问题信息、图片、回复中，检�
 
 | Bug 来源 | 识别特征 | 默认环境 | 是否需要向用户确认 |
 |----------|---------|---------|-------------------|
-| **工单** | GD编号 / os.handday.com 链接 | 生产环境（ap-shanghai，日志主题 hdsaas-log-topic） | 否，直接查询 |
-| **禅道** | chandao 链接 / 纯数字Bug编号 | 测试环境（ap-chengdu，日志主题 dev） | 否，直接查询 |
+| **工单** | GD编号 / os.handday.com 链接 | 生产环境（ap-shanghai） | 否，直接查询 |
+| **禅道** | chandao 链接 / 纯数字Bug编号 | 测试环境（ap-chengdu） | 否，直接查询 |
 | **直接提供 traceId** | 用户直接给出 traceId，无工单/禅道来源 | — | **是，必须确认** |
 
-> **环境选择铁律（不可违反）**：
-> 1. **禁止两边都查** — 每次只能派发一个环境的日志查询，严禁同时或先后派发生产+测试两个环境的日志抓取。不得以"我先两边都查一下"、"两个环境都试试"等理由绕过此规则。
-> 2. **禁止跳过确认** — 当 Bug 来源为"直接提供 traceId"时，在用户明确回复确认环境之前，**严禁派发 tencent-cloud-troubleshooter subagent**。必须等待用户选择后，才按选择的环境派发日志专家。
-> 3. **环境不可更改** — 一旦根据规则确定环境（或用户确认环境），后续日志查询必须使用该环境，中途不得切换或追加另一个环境。
+> **环境选择铁律**：禁止两边都查、禁止跳过确认、环境不可更改。→ 详细规则详见 tccli-log-query/SKILL.md Step 0.5。
 
 ### 1.5.2 决策逻辑
 
@@ -431,26 +352,23 @@ PM 根据以下决策树判断是否启用日志抓取：
 
 当决策启用日志抓取时，PM 派发 `tencent-cloud-troubleshooter` subagent，prompt 中必须包含：
 
-1. **检索键**（traceId 优先，无 traceId 时用 corpId，从 Bug 信息中提取）：
-   - 有 traceId 时：传入 traceId 作为检索键，不需要 corpId
-   - 无 traceId 但有 corpId 时：传入 corpId 作为补充检索键（需搭配其他条件组合检索，仅支持 CLS 日志检索，不支持 APM 链路查询）
-   - 无 traceId 且无 corpId 时：主动向用户获取，优先获取 traceId，其次获取 corpId
+1. **检索键**（traceId 优先，无 traceId 时用 corpId 尽量传入；→ 优先级规则详见 tccli-log-query/SKILL.md Step 2）
 2. **异常信息摘要**（已知的异常类型、错误码、报错信息）
 3. **时间范围**（如工单中有提及问题发生时间）
-4. **查询目的**：明确告知日志专家需要获取什么信息（如：确认异常根因、获取完整调用链、查看业务参数流转等）
+4. **查询目的**：明确告知日志专家需要获取什么信息
 
 **派发指令模板**：
 
 ```
 请协助查询[生产/测试]环境日志，以下为已知信息：
-- 查询环境: [生产环境(ap-shanghai) / 测试环境(ap-chengdu)]
+- 查询环境: [生产(ap-shanghai) / 测试(ap-chengdu)]
   （工单来源→生产，禅道来源→测试，直接提供traceId→已向用户确认）
-- 检索键（traceId 优先，无 traceId 时用 corpId 尽量传入）：
-  - traceId: [从Bug信息提取，如有]
-  - corpId: [从Bug信息提取，如无 traceId 则尽量获取；已知信息中没有时主动向用户获取]
+- 检索键:
+  - traceId: [如有]
+  - corpId: [如无 traceId 则尽量获取]
 - 异常信息: [已知的异常摘要]
-- 时间范围: [如知道问题发生时间则提供，否则默认15天]
-- 查询目的: [明确说明需要获取的信息，如：确认异常根因/获取完整调用链/查看业务参数流转等]
+- 时间范围: [如知道则提供，否则默认15天]
+- 查询目的: [如：确认异常根因/获取完整调用链/查看业务参数流转等]
 
 请执行CLS日志检索和APM链路追踪（仅 traceId 场景支持 APM），返回结构化诊断报告。
 ```
@@ -749,14 +667,14 @@ fix: 采购入库单批量生单时库存数量未校验导致NPE
 
 ## 关键原则
 
-1. **PM不亲自排查代码** —— 只做编排调度和信息整合
-2. **信息不够不动手** —— 宁可多问一句，不盲目排查
-3. **先定位后修复** —— 必须确认根因才能动手
-4. **修复需用户授权** —— 方案报告后等待确认
-5. **修复必审查** —— 改完代码必须 code-review
-6. **链接单号即触发** —— 用户给出工单/禅道链接或单号即可自动识别并执行全流程
-7. **无 Bug 不硬解** —— 排查后未发现问题时，如实反馈，禁止编造修复方案
-8. **修复必出Commit** —— 修复完成后必须整理输出包含问题来源、根因、解决方案的 Git Commit 信息
-9. **日志抓取按需启用** —— 存在traceId、corpId或明显异常信息时，PM自动权衡是否先抓取环境日志辅助定位，不强制不走也不强制走。traceId优先：有traceId用traceId（支持CLS+APM），无traceId用corpId（仅CLS，需搭配其他条件组合检索）
-10. **环境感知** —— 工单来源默认查生产环境日志，禅道来源默认查测试环境日志，直接提供traceId时必须向用户确认环境
-11. **业务异常≠代码Bug** —— 当日志诊断确认为业务规则正常触发的异常时，输出业务解释报告而非强行修代码
+1. **PM不亲自排查代码** — 只做编排调度和信息整合
+2. **信息不够不动手** — 宁可多问一句，不盲目排查
+3. **先定位后修复** — 必须确认根因才能动手
+4. **修复需用户授权** — 方案报告后等待确认
+5. **修复必审查** — 改完代码必须 code-review
+6. **链接单号即触发** — 给出工单/禅道链接或单号即可自动识别并执行全流程
+7. **无 Bug 不硬解** — 排查后未发现问题时如实反馈，禁止编造修复方案（详见 Step 3.4）
+8. **修复必出Commit** — 修复完成后必须整理输出 Git Commit 信息
+9. **日志抓取按需启用** — 存在traceId/corpId/异常信息时PM自动权衡是否先抓日志（检索键优先级详见 tccli-log-query/SKILL.md Step 2）
+10. **环境感知** — 工单→生产，禅道→测试，直接给traceId→必须向用户确认（详见 Step 1.5.1.5）
+11. **业务异常≠代码Bug** — 确认为业务规则正常触发时输出业务解释报告而非强行修代码（详见 Step 1.5.5）
