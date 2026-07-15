@@ -154,10 +154,60 @@ ls ~/.tccli/default.credential
 
 查询过程中遇到以下认证异常时，**必须自动执行恢复流程**，不得仅提示用户手动处理：
 
-| 异常类型 | 触发条件 | 恢复流程 |
-|---------|---------|---------|
-| **Token 失效** | AuthFailure、token过期、密钥失效 | → 执行 `/tccli-setup` 中的「Token 失效重认证流程」 |
-| **SecretId 读取 Bug** | 登录成功 + 凭据文件存在 + 命令报 SecretId 不存在 | → 执行 `/tccli-setup` 中的「SecretId 读取 Bug 绕过方案」 |
+#### Token 失效重认证流程
+
+> **触发条件**：AuthFailure、token过期、密钥失效。必须先删除旧凭据文件再重新登录，禁止在旧文件上直接覆盖。
+
+```powershell
+# ① 删除旧凭据文件（Windows）
+Remove-Item "$env:USERPROFILE\.tccli\default.credential" -Force -ErrorAction SilentlyContinue
+# Linux: rm -f ~/.tccli/default.credential
+
+# ② 重新登录授权
+tccli auth login
+
+# ③ 验证新凭据（Windows）
+Test-Path "$env:USERPROFILE\.tccli\default.credential"
+```
+
+> 完整流程详见 `/tccli-setup` 技能。
+
+#### SecretId 读取 Bug 绕过方案
+
+> **TCCLI 已知 Bug**：浏览器授权登录（`tccli auth login`）成功后，凭据文件已写入，但后续命令读取凭据失败，报「SecretId 不存在」。触发条件：登录成功 + 凭据文件存在 + 命令报 SecretId 不存在。
+
+**步骤一：从凭据文件提取密钥**
+
+```powershell
+# Windows (PowerShell)
+$cred = Get-Content "$env:USERPROFILE\.tccli\default.credential" | ConvertFrom-Json
+$secretId = $cred.secretId
+$secretKey = $cred.secretKey
+$token = $cred.token
+```
+
+```bash
+# Linux/macOS
+secretId=$(python3 -c "import json; print(json.load(open('$HOME/.tccli/default.credential'))['secretId'])")
+secretKey=$(python3 -c "import json; print(json.load(open('$HOME/.tccli/default.credential'))['secretKey'])")
+token=$(python3 -c "import json; print(json.load(open('$HOME/.tccli/default.credential'))['token'])")
+```
+
+**步骤二：后续所有命令通过参数传递密钥**
+
+触发此 Bug 后，**当前会话剩余的所有 tccli 命令**均追加 `--secretId`、`--secretKey`、`--token` 参数：
+
+```powershell
+# 示例
+tccli cls SearchLog --cli-unfold-argument `
+    --secretId $secretId `
+    --secretKey $secretKey `
+    --token $token `
+    --region ap-shanghai `
+    --TopicId <TopicId> --From <From> --To <To> --QueryString 'traceId:xxx'
+```
+
+> **关键规则**：三参数缺一不可（即使 token 为空也需传递 `--token ""`）；密钥值从 `default.credential` 文件读取，不以明文写在文档中。完整说明详见 `/tccli-setup` 技能。
 
 > 恢复后重试之前失败的查询命令。
 
@@ -416,6 +466,9 @@ $env:PYTHONUTF8="1"; tccli cls SearchLog --cli-unfold-argument `
 4. **环境选择** — 按来源选定环境，禁止两边都查（详见 Step 0.5）
 5. **重试上限** — 最多5次不同查询，禁止无限循环（详见 Step 4）
 6. **环境依赖** — TCCLI 未就绪时引导用户使用 `/tccli-setup` 技能；认证异常自动恢复（详见 Step 1）
+7. **时间约束** — 默认查询15天范围，最大不超过30天
+8. **编码优先** — Windows 下每条 tccli 命令前必须设置 `$env:PYTHONUTF8="1"` 避免中文乱码
+9. **时间精度** — CLS 用毫秒时间戳，APM 用秒时间戳，切勿混淆
 
 ---
 
