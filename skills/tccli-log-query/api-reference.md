@@ -2,9 +2,9 @@
 
 本文档提供 CLS 日志服务和 APM 应用性能监控相关查询命令的详细参数说明。
 
-> **环境配置**：本 skill 支持生产/测试双环境，环境选择规则和配置表 → 详见 [SKILL.md](SKILL.md) Step 0.5。
+> **环境配置**：本 skill 支持生产/测试双环境，环境选择规则和配置表 → 详见 [SKILL.md](SKILL.md) Step 0.5。所有 TopicId、Region 等敏感值从项目根目录 `.env` 文件读取。
 >
-> 以下示例以生产环境为例。测试环境请替换 `--region` 和 `--TopicId`。
+> 以下示例以生产环境为例。测试环境请替换为 `$CLS_TEST_REGION` 和 `$CLS_TEST_TOPIC_ID`。
 
 ---
 
@@ -80,8 +80,8 @@ tccli cls SearchLog --cli-unfold-argument --param...
 ```bash
 # 检索 ERROR 和 WARN 级别日志
 $env:PYTHONUTF8="1"; tccli cls SearchLog --cli-unfold-argument `
-    --region ap-shanghai `
-    --TopicId 797014ec-3f76-471b-abd8-a1bba1ec5cfb `
+    --region $CLS_PROD_REGION `
+    --TopicId $CLS_PROD_TOPIC_ID `
     --From 1685086740862 `
     --To 1685087640862 `
     --QueryString 'level:ERROR OR level:WARN' `
@@ -91,8 +91,8 @@ $env:PYTHONUTF8="1"; tccli cls SearchLog --cli-unfold-argument `
 
 # SQL 分析：统计各级别日志数量
 $env:PYTHONUTF8="1"; tccli cls SearchLog --cli-unfold-argument `
-    --region ap-shanghai `
-    --TopicId 797014ec-3f76-471b-abd8-a1bba1ec5cfb `
+    --region $CLS_PROD_REGION `
+    --TopicId $CLS_PROD_TOPIC_ID `
     --From 1685086740862 `
     --To 1685087640862 `
     --QueryString '* | SELECT level, count(*) as cnt GROUP BY level' `
@@ -141,7 +141,7 @@ $env:PYTHONUTF8="1"; tccli cls DescribeLogHistogram --cli-unfold-argument `
     --From 1685086740862 `
     --To 1685087640862 `
     --Interval 30000 `
-    --TopicId 797014ec-3f76-471b-abd8-a1bba1ec5cfb `
+    --TopicId $CLS_PROD_TOPIC_ID `
     --Query 'level:ERROR OR level:WARN' `
     --SyntaxRule 1
 ```
@@ -185,8 +185,8 @@ tccli cls DescribeLogContext --cli-unfold-argument --param...
 ```bash
 # 查看某条日志前后各10条
 $env:PYTHONUTF8="1"; tccli cls DescribeLogContext --cli-unfold-argument `
-    --region ap-shanghai `
-    --TopicId 797014ec-3f76-471b-abd8-a1bba1ec5cfb `
+    --region $CLS_PROD_REGION `
+    --TopicId $CLS_PROD_TOPIC_ID `
     --BTime '2024-01-15 14:25:00.000' `
     --PkgId 528C1318606EFEB8-1A7 `
     --PkgLogId 65536 `

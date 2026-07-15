@@ -46,6 +46,38 @@ description: Query Tencent Cloud CLS logs and APM traces via TCCLI for problem d
 
 ---
 
+## 环境配置加载（前置步骤）
+
+> **所有敏感配置值（TopicId、LogsetId、Region、内部系统地址）均从项目根目录 `.env` 文件读取，禁止在文档中硬编码。**
+>
+> `.env` 文件已排除在 Git 追踪之外（见 `.gitignore`）。模板见 `.env.example`。
+
+### 加载方式
+
+执行任何查询前，先读取项目根目录的 `.env` 文件：
+
+```bash
+# 读取 .env 文件（如存在）
+cat <project-root>/.env
+```
+
+解析出以下环境变量：
+
+| 环境变量 | 说明 |
+|----------|------|
+| `CLS_PROD_TOPIC_ID` | 生产环境日志主题 ID |
+| `CLS_PROD_LOGSET_ID` | 生产环境日志集 ID |
+| `CLS_PROD_REGION` | 生产环境地域（默认 ap-shanghai） |
+| `CLS_TEST_TOPIC_ID` | 测试环境日志主题 ID |
+| `CLS_TEST_LOGSET_ID` | 测试环境日志集 ID |
+| `CLS_TEST_REGION` | 测试环境地域（默认 ap-chengdu） |
+| `WORKORDER_BASE_URL` | 工单系统地址 |
+| `ZENTAO_BASE_URL` | 禅道系统地址 |
+
+> **缺失处理**：如 `.env` 文件不存在或某项为空，**必须主动询问用户**提供对应值，不得猜测或使用硬编码默认值。
+
+---
+
 ## 工作流程
 
 ```
@@ -99,13 +131,13 @@ Step 0: 需求澄清 → Step 0.5: 环境选择 → Step 1: 环境检查 → Ste
 
 ### 环境配置
 
+> 以下值均从 `.env` 文件读取，变量名见「环境配置加载」章节。
+
 | 配置项 | 生产环境 | 测试环境 |
-|--------|---------|---------|
-| 地域 | `ap-shanghai` | `ap-chengdu`（成都） |
-| 日志集名称 | `hdsaas-log-group` | `hdsaas-log-group` |
-| 日志集 ID | `91b588b7-222b-41f8-b8c0-acedc86f84da` | `1f3fd353-b847-4191-84de-387a40db2e89` |
-| 日志主题名称 | `hdsaas-log-topic` | `dev` |
-| 日志主题 ID (TopicId) | `797014ec-3f76-471b-abd8-a1bba1ec5cfb` | `a73f1503-1abb-4c3d-b53b-ed8f64e7b162` |
+|--------|---------|----------|
+| 地域 | `$CLS_PROD_REGION` | `$CLS_TEST_REGION` |
+| 日志集 ID | `$CLS_PROD_LOGSET_ID` | `$CLS_TEST_LOGSET_ID` |
+| 日志主题 ID (TopicId) | `$CLS_PROD_TOPIC_ID` | `$CLS_TEST_TOPIC_ID` |
 
 ### 选择规则
 
@@ -113,8 +145,8 @@ Step 0: 需求澄清 → Step 0.5: 环境选择 → Step 1: 环境检查 → Ste
 
 | Bug 来源 | 识别特征 | 默认环境 | 是否需要向用户确认 |
 |----------|---------|---------|-------------------|
-| **工单** | GD编号 / os.handday.com 链接 | 生产环境（ap-shanghai） | 否，直接查询 |
-| **禅道** | chandao 链接 / 纯数字Bug编号 | 测试环境（ap-chengdu） | 否，直接查询 |
+| **工单** | GD编号 / `$WORKORDER_BASE_URL` 链接 | 生产环境（`$CLS_PROD_REGION`） | 否，直接查询 |
+| **禅道** | `$ZENTAO_BASE_URL` 链接 / 纯数字Bug编号 | 测试环境（`$CLS_TEST_REGION`） | 否，直接查询 |
 | **直接提供 traceId** | 用户直接给出 traceId | — | **是，必须确认** |
 
 > **环境选择铁律（不可违反）**：
@@ -127,8 +159,8 @@ Step 0: 需求澄清 → Step 0.5: 环境选择 → Step 1: 环境检查 → Ste
 当需要向用户确认环境时：
 
 > 「请问这个 traceId 属于哪个环境？
-> 1. **生产环境** — 上海地域（ap-shanghai），日志主题 hdsaas-log-topic
-> 2. **测试环境** — 成都地域（ap-chengdu），日志主题 dev
+> 1. **生产环境** — `$CLS_PROD_REGION`
+> 2. **测试环境** — `$CLS_TEST_REGION`
 >
 > 请确认后我将执行对应环境的日志检索。」
 
@@ -215,7 +247,7 @@ tccli cls SearchLog --cli-unfold-argument `
     --secretId $secretId `
     --secretKey $secretKey `
     --token $token `
-    --region ap-shanghai `
+    --region <环境对应Region> `
     --TopicId <TopicId> --From <From> --To <To> --QueryString 'traceId:xxx'
 ```
 
@@ -253,7 +285,7 @@ tccli cls SearchLog --cli-unfold-argument `
 - **TopicId（按环境选择）**：根据 Step 0.5 选择的环境确定。
 - **InstanceId**：APM 业务系统 ID（APM 查询必填，需根据实际环境确认）
 
-> **重要**：CLS 日志查询的主题和地域根据 Step 0.5 选择的环境确定。生产环境查 `hdsaas-log-topic`（`--region ap-shanghai`），测试环境查 `dev` 主题（`--region ap-chengdu`）。不查询其他日志主题。
+> **重要**：CLS 日志查询的主题和地域根据 Step 0.5 选择的环境确定，TopicId 和 Region 均从 `.env` 文件读取。不查询其他日志主题。
 >
 > **APM 链路查询限制**：APM 链路查询（DescribeGeneralSpanList 等）**仅支持 traceId 检索**，不支持 corpId。当只有 corpId 无 traceId 时，仅执行 CLS 日志检索，跳过 APM 链路查询。
 
@@ -261,7 +293,7 @@ tccli cls SearchLog --cli-unfold-argument `
 
 ## Step 3: 构建查询
 
-> **环境参数映射**：以下命令示例以生产环境为例。测试环境替换 `--region ap-chengdu`、`--TopicId a73f1503-1abb-4c3d-b53b-ed8f64e7b162`（详见 Step 0.5）。
+> **环境参数映射**：以下命令示例以生产环境为例，TopicId 和 Region 从 `.env` 读取。测试环境替换为 `$CLS_TEST_REGION` 和 `$CLS_TEST_TOPIC_ID`（详见 Step 0.5）。
 >
 > **Windows 编码**：每条 tccli 命令前设置 `$env:PYTHONUTF8="1"`。
 >
@@ -273,8 +305,8 @@ tccli cls SearchLog --cli-unfold-argument `
 
 ```bash
 $env:PYTHONUTF8="1"; tccli cls SearchLog --cli-unfold-argument `
-    --region ap-shanghai `
-    --TopicId 797014ec-3f76-471b-abd8-a1bba1ec5cfb `
+    --region $CLS_PROD_REGION `
+    --TopicId $CLS_PROD_TOPIC_ID `
     --From <起始时间戳毫秒> `
     --To <结束时间戳毫秒> `
     --QueryString 'traceId:<traceId值>' `

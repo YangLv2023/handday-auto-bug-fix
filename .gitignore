@@ -2,5 +2,8 @@
 node_modules/
 .idea/
 
+# 环境配置文件（含敏感信息，禁止提交）
+.env
+
 # 发布脚本（含敏感操作，禁止提交）
 publish.ps1

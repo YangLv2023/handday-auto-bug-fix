@@ -236,7 +236,7 @@ tccli cls SearchLog --cli-unfold-argument `
     --secretId $secretId `
     --secretKey $secretKey `
     --token $token `
-    --region ap-shanghai `
+    --region <环境对应Region> `
     --TopicId <TopicId> --From <From> --To <To> --QueryString 'traceId:xxx'
 ```
 

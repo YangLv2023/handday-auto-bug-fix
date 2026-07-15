@@ -1,11 +1,13 @@
 ---
 name: handday-workorder
-description: Query handday OS platform data including workorders, orders, customers, and agents via browser automation. Use when user asks about workorders (工单), ticket status, workorder details, platform data queries, or anything related to os.handday.com operations system.
+description: Query handday OS platform data including workorders, orders, customers, and agents via browser automation. Use when user asks about workorders (工单), ticket status, workorder details, platform data queries, or anything related to handday OS operations system.
 ---
+
+> **环境配置**：工单系统地址从项目根目录 `.env` 文件的 `$WORKORDER_BASE_URL` 读取。如 `.env` 不存在或该值为空，**必须主动询问用户**提供工单系统地址。
 
 # Handday Workorder & Platform Query
 
-Query data from handday OS platform (os.handday.com) via Chrome DevTools MCP browser automation.
+Query data from handday OS platform (`$WORKORDER_BASE_URL`) via Chrome DevTools MCP browser automation.
 
 ## Prerequisites
 
@@ -17,7 +19,7 @@ Query data from handday OS platform (os.handday.com) via Chrome DevTools MCP bro
 ### Check Login State
 ```
 1. list_pages → check current page
-2. navigate_page → url: https://os.handday.com/biz#/biz/tool/workorder-list
+2. navigate_page → url: $WORKORDER_BASE_URL/biz#/biz/tool/workorder-list
 3. If redirects to /biz/login → user needs to login (see QR Login Flow below)
 4. If shows 工单管理 → already authenticated
 ```
@@ -25,7 +27,7 @@ Query data from handday OS platform (os.handday.com) via Chrome DevTools MCP bro
 ### QR Login Flow
 ```
 1. Kill stale Chrome: run_in_terminal → taskkill /F /IM chrome.exe
-2. navigate_page → url: https://os.handday.com/biz#/biz/tool/workorder-list
+2. navigate_page → url: $WORKORDER_BASE_URL/biz#/biz/tool/workorder-list
 3. wait_for → text: ["企业微信登录", "当前二维码已过期"]
 4. take_snapshot → check if "当前二维码已过期" appears
 5. If expired: click the "刷新" link, then wait_for → text: ["企业微信登录"]
@@ -195,7 +197,7 @@ async () => {
 For EVERY image URL in `allImageUrls`, download via PowerShell:
 ```powershell
 $url = "{COS_IMAGE_URL}"
-$headers = @{ "Referer" = "https://os.handday.com/" }
+$headers = @{ "Referer" = "$WORKORDER_BASE_URL/" }
 Invoke-WebRequest -Uri $url -Headers $headers -OutFile "output/wo-{n}.png"
 ```
 
@@ -250,7 +252,7 @@ Also check `data-original` attribute for lazy-loaded images in replies.
 ### Step 2: Download images via PowerShell (MANDATORY - always do this)
 ```powershell
 $url = "{COS_IMAGE_URL}"
-$headers = @{ "Referer" = "https://os.handday.com/" }
+$headers = @{ "Referer" = "$WORKORDER_BASE_URL/" }
 Invoke-WebRequest -Uri $url -Headers $headers -OutFile "output/wo-img{n}.png"
 ```
 Then: `read_file` → display the downloaded image to user.

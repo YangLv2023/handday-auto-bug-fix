@@ -52,9 +52,9 @@ skills:
 
 - **Windows 编码**：每条 tccli 命令前设置 `$env:PYTHONUTF8="1"` 避免中文乱码
 - **时间戳精度**：CLS 用毫秒时间戳，APM 用秒时间戳，切勿混淆
-- **CLS 环境配置**：根据 Step 2 选择环境：
-  - 生产环境：`--region ap-shanghai`，`--TopicId 797014ec-3f76-471b-abd8-a1bba1ec5cfb`
-  - 测试环境：`--region ap-chengdu`，`--TopicId a73f1503-1abb-4c3d-b53b-ed8f64e7b162`
+- **CLS 环境配置**：根据 Step 2 选择环境，TopicId 和 Region 均从项目根目录 `.env` 文件读取（详见 tccli-log-query/SKILL.md「环境配置加载」章节）：
+  - 生产环境：`--region $CLS_PROD_REGION`，`--TopicId $CLS_PROD_TOPIC_ID`
+  - 测试环境：`--region $CLS_TEST_REGION`，`--TopicId $CLS_TEST_TOPIC_ID`
 - **参数展开**：所有 tccli 命令需带 `--cli-unfold-argument` 参数
 - **OT Span 解码**：DescribeGeneralOTSpanList 返回的 Spans 字段需 Base64 解码 + gzip 解压 + UTF-8 转字符串
 - **分页查询**：SearchLog 返回 Context 字段，透传可获取后续日志（最多1万条，过期1小时）

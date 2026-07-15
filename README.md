@@ -250,7 +250,7 @@ Skill 首次运行时会自动执行 **Step 0 环境初始化**：
 帮我看看 GD2026052314140082 这个工单
 
 # 通过禅道链接
-这个 bug 修一下：https://chandao.facehand.cn/bug-view-12345.html
+这个 bug 修一下：https://<禅道地址>/bug-view-12345.html
 
 # 通过文字描述
 出单的时候报 NPE 了，堆栈如下：...
@@ -287,7 +287,7 @@ Skill 会在检测到以下关键词时自动激活：
 - 前端代码目录：`E:\workspace\handday-web`（Vue 前端项目）
 - 技术栈：Spring Boot + Java 8 + Spring Cloud + Nacos + MyBatis
 - 代码检索：CodeGraph（68 万+ 节点索引）
-- 工单平台：os.handday.com
+- 工单平台：地址配置于 `.env` 文件（`WORKORDER_BASE_URL`）
 
 如需在其他项目中使用，需修改 `SKILL.md` 中的：
 1. 前端项目约束（目录路径、分支策略）
