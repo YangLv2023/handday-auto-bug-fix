@@ -15,13 +15,32 @@ description: 全自动Bug诊断与修复编排器。采用多Agent协作模式�
 | **后端专家** | `senior-java-expert` subagent | Java代码定位、根因分析、修复实施 |
 | **腾讯云日志专家** | `tencent-cloud-troubleshooter` subagent | 生产环境CLS日志检索、APM链路追踪、根因诊断（可选启用） |
 
-> **依赖说明**：subagent 配置模板存放在 `agents/` 子目录，子 skill 备份存放在 `skills/` 子目录。完整依赖清单（含 `requiredSubagents` 和 `requiredSkills`）→ 详见 [agents/manifest.json](agents/manifest.json)。
+> **依赖说明**：subagent 配置模板存放在 `agents/` 子目录，子 skill 备份存放在 `skills/` 子目录。完整依赖清单（含 `requiredSubagents` 和 `requiredSkills`，每项标注 `scope` 使用范围）→ 详见 [agents/manifest.json](agents/manifest.json)。
+>
+> **skill 使用范围分类**：
+> - **PM 可用子 skill**：`handday-workorder`（工单采集）、`code-review`（代码审查）— PM 可直接调用
+> - **subagent 专属依赖 skill（🚫 PM 不可直接使用）**：`tccli-log-query`（仅供 `tencent-cloud-troubleshooter` subagent 加载）、`tccli-setup`（PM 仅引导用户使用 `/tccli-setup` 命令，不直接加载）、`chrome-devtools`（供 `frontend-bug-fixer` 和 `handday-workorder` 浏览器自动化）
+>
+> ⚠️ **关键区分**：`tccli-log-query` 虽然作为备份存储在主 skill 的 `skills/` 目录中并安装到用户级 skills 目录，但它是 **`tencent-cloud-troubleshooter` subagent 的内部依赖**，不是 PM 的可用工具。PM 不得直接加载或使用该 skill。
 >
 > 新环境首次运行时，[Step 0](#step-0-环境初始化与依赖检查subagent--子-skill必须最先执行) 会自动检查并从备份初始化缺失的 subagent / 子 skill，无需手动安装。
 >
 > **安装后须知**：`tccli-setup`、`tccli-log-query` 子 skill 和 `tencent-cloud-troubleshooter` 子 agent 会随 Step 0 自动检查并安装。已存在则跳过。
 >
 > **多环境支持**：同时支持 Qoder（`~/.qoder/`）和 Workbuddy（`~/.workbuddy/`）两种环境。npm 安装器默认同时安装到两个环境，也可通过 `--target qoder` 或 `--target workbuddy` 指定单一目标。Workbuddy 安装后需执行 `/reload-plugins` 生效。
+
+---
+
+## 🚫 PM 铁律（不可违反 — 优先于所有流程步骤）
+
+> **PM（你自己）是编排者，不是执行者。以下操作坚决禁止由 PM 直接执行：**
+
+1. **🚫 禁止 PM 直接执行 tccli 命令** — 所有 CLS 日志检索（SearchLog、DescribeLogHistogram、DescribeLogContext）、APM 链路查询（DescribeGeneralSpanList 等）、TCCLI 环境检查和认证，必须通过派发 `tencent-cloud-troubleshooter` subagent 执行。
+2. **🚫 禁止 PM 直接加载 `tccli-log-query` skill** — 该 skill 是 `tencent-cloud-troubleshooter` subagent 的内部依赖，不是 PM 的可用工具。PM 只负责将检索键（traceId/corpId）、环境、查询目的传递给 subagent，由 subagent 加载该 skill 并执行查询。
+3. **🚫 禁止 PM 亲自排查代码** — 代码搜索、定位、分析由 `frontend-bug-fixer` 和 `senior-java-expert` subagent 执行，PM 只做编排调度和信息整合。
+4. **🚫 禁止 PM 越级操作** — PM 不执行任何本应由 subagent 执行的操作，包括但不限于：执行 tccli 命令、直接搜索代码库定位 bug、直接修改代码文件。
+
+> **违反以上任一条均视为流程错误。** 当 PM 检测到自身有"直接查日志"或"直接执行命令"的冲动时，应立即停止并转为派发 subagent。
 
 ---
 
@@ -350,6 +369,13 @@ PM 根据以下决策树判断是否启用日志抓取：
 
 ### 1.5.3 派发腾讯云日志专家
 
+> 🚫 **铁律：PM 不得自行执行日志查询。** 以下操作必须通过派发 `tencent-cloud-troubleshooter` subagent 完成，PM 不得直接加载 `tccli-log-query` skill 或执行任何 tccli 命令：
+> - CLS 日志检索（SearchLog、DescribeLogHistogram、DescribeLogContext）
+> - APM 链路查询（DescribeGeneralSpanList、DescribeGeneralOTSpanList、DescribeGeneralMetricData 等）
+> - TCCLI 环境检查和认证（`tccli --version`、凭据文件检查、`tccli auth login`）
+>
+> **正确做法**：PM 将检索键、环境、查询目的组装为派发 prompt，交给 `tencent-cloud-troubleshooter` subagent 执行，等待其返回诊断报告。
+
 当决策启用日志抓取时，PM 派发 `tencent-cloud-troubleshooter` subagent，prompt 中必须包含：
 
 1. **检索键**（traceId 优先，无 traceId 时用 corpId 尽量传入；→ 优先级规则详见 tccli-log-query/SKILL.md Step 2）
@@ -667,7 +693,7 @@ fix: 采购入库单批量生单时库存数量未校验导致NPE
 
 ## 关键原则
 
-1. **PM不亲自排查代码** — 只做编排调度和信息整合
+1. **🚫 PM 不亲自排查代码也不亲自查日志** — PM 只做编排调度和信息整合，代码排查派发给前后端专家 subagent，日志查询派发给 `tencent-cloud-troubleshooter` subagent。禁止 PM 直接执行 tccli 命令或加载 `tccli-log-query` skill（详见上方「PM 铁律」）
 2. **信息不够不动手** — 宁可多问一句，不盲目排查
 3. **先定位后修复** — 必须确认根因才能动手
 4. **修复需用户授权** — 方案报告后等待确认

@@ -59,11 +59,13 @@
       "name": "tccli-log-query",
       "role": "TCCLI日志检索与链路查询",
       "type": "user",
+      "scope": "subagent-only",
+      "owner": "tencent-cloud-troubleshooter",
       "templatePath": "skills/tccli-log-query/",
       "files": ["SKILL.md", "api-reference.md"],
       "required": true,
       "usedInSteps": ["Step 1.5 生产日志抓取（可选）"],
-      "note": "tencent-cloud-troubleshooter 使用此技能执行CLS日志检索和APM链路查询"
+      "note": "仅供 tencent-cloud-troubleshooter subagent 加载使用，PM 不得直接调用。安装到用户级 skills 目录供 subagent 加载。"
     },
     {
       "name": "code-review",
