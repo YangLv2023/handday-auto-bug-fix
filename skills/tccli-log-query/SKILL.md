@@ -7,9 +7,21 @@ description: Query Tencent Cloud CLS logs and APM traces via TCCLI for problem d
 
 通过腾讯云 CLI (TCCLI) 检索 CLS 日志和查询 APM 链路，用于问题诊断和生产故障分析。
 
-> **归属声明**：本 skill 是 `tencent-cloud-troubleshooter` subagent 的内部依赖 skill。
-> - **在 `handday-auto-bug-fix` 编排流程中**：仅 `tencent-cloud-troubleshooter` subagent 有权加载和使用本 skill。PM（主编排 Agent）不得直接加载或执行本 skill 中的任何命令，必须通过派发 subagent 完成。
-> - **独立使用场景**：当用户独立触发日志查询（非通过 handday-auto-bug-fix 流程）时，本 skill 可直接使用。
+> **⚠️ 路由规则（加载前必须判断）**：
+>
+> 本 skill **仅限 `tencent-cloud-troubleshooter` subagent 加载和执行**。在加载本 skill 之前，必须先判断当前角色：
+>
+> | 当前角色 | 是否允许加载本 skill | 正确做法 |
+> |----------|---------------------|---------|
+> | `tencent-cloud-troubleshooter` subagent | ✅ 允许 | 直接加载并执行本 skill |
+> | PM（主编排 Agent） | 🚫 **禁止** | 立即停止加载，改为派发 `tencent-cloud-troubleshooter` subagent，或加载 `handday-auto-bug-fix` 进入完整编排流程 |
+> | 其他 subagent | 🚫 **禁止** | 立即停止加载，将日志查询需求交由 PM 协调派发 `tencent-cloud-troubleshooter` subagent |
+>
+> **如果你不是 `tencent-cloud-troubleshooter` subagent，请立即停止，不要继续加载本 skill。**
+
+> **归属声明**：本 skill 是 `tencent-cloud-troubleshooter` subagent 的**专属内部依赖 skill**，不是 PM 或其他 subagent 的可用工具。
+> - 在 `handday-auto-bug-fix` 编排流程中：仅 `tencent-cloud-troubleshooter` subagent 有权加载和使用本 skill。PM（主编排 Agent）不得直接加载或执行本 skill 中的任何命令，必须通过派发 subagent 完成。
+> - 即使用户独立触发日志查询（未通过 handday-auto-bug-fix 流程），PM 也应派发 `tencent-cloud-troubleshooter` subagent 执行查询，不应直接加载本 skill。
 
 ## 铁律（不可违反）
 
