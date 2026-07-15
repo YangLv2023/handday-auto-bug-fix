@@ -78,13 +78,13 @@ tccli cls SearchLog --cli-unfold-argument --param...
 #### 示例
 
 ```bash
-# 检索 ERROR 级别日志
+# 检索 ERROR 和 WARN 级别日志
 $env:PYTHONUTF8="1"; tccli cls SearchLog --cli-unfold-argument `
     --region ap-shanghai `
     --TopicId 797014ec-3f76-471b-abd8-a1bba1ec5cfb `
     --From 1685086740862 `
     --To 1685087640862 `
-    --QueryString 'level:ERROR' `
+    --QueryString 'level:ERROR OR level:WARN' `
     --QuerySyntax 1 `
     --Limit 100 `
     --Sort desc
@@ -142,7 +142,7 @@ $env:PYTHONUTF8="1"; tccli cls DescribeLogHistogram --cli-unfold-argument `
     --To 1685087640862 `
     --Interval 30000 `
     --TopicId 797014ec-3f76-471b-abd8-a1bba1ec5cfb `
-    --Query 'level:ERROR' `
+    --Query 'level:ERROR OR level:WARN' `
     --SyntaxRule 1
 ```
 

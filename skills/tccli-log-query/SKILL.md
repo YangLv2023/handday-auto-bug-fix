@@ -185,6 +185,9 @@ ls ~/.tccli/default.credential
   - **两者都没有时**：需向用户索要，优先获取 traceId，其次获取 corpId
 - **时间范围**：默认查询15天，最大不超过30天（问题发生的大致时间精确到分钟级最佳）
 - **附加过滤条件**：可根据情况组合使用 `level`、`message`、`throwable` 字段
+  - **level**：必须同时覆盖 `ERROR` 和 `WARN`（`level:ERROR OR level:WARN`）。WARN 级别日志不可遗漏——许多异常在被捕获后以 WARN 级别记录，仅检索 `level:ERROR` 会漏掉这些关键线索
+  - **message**：**关键字段**，可能包含完整异常堆栈信息，应作为重点检索和分析对象
+  - **throwable**：异常类型字段，用于精确过滤特定异常
 - **TopicId（按环境选择）**：根据 Step 0.5 选择的环境确定。
 - **InstanceId**：APM 业务系统 ID（APM 查询必填，需根据实际环境确认）
 
@@ -218,9 +221,10 @@ $env:PYTHONUTF8="1"; tccli cls SearchLog --cli-unfold-argument `
 
 **检索语法（CQL）**：
 - 有 traceId：`traceId:abc123`（唯一检索键，不需要 corpId）
-- 无 traceId 有 corpId：`corpId:123456 AND level:ERROR`（需搭配其他条件，不宜单独使用）
-- 组合过滤：`traceId:abc123 AND level:ERROR AND throwable:NullPointerException`
-- 支持 `level`、`message`、`throwable` 等字段组合
+- 无 traceId 有 corpId：`corpId:123456 AND (level:ERROR OR level:WARN)`（需搭配其他条件，不宜单独使用）
+- 组合过滤：`traceId:abc123 AND (level:ERROR OR level:WARN) AND throwable:NullPointerException`
+- message 检索：`traceId:abc123 AND message:"异常关键词"` — message 字段可能包含完整异常堆栈，是重要检索维度
+- 支持 `level`、`message`、`throwable` 等字段组合，使用 `AND`/`OR` 进行逻辑连接
 
 > 查询时间范围默认15天，最大不超过30天。
 
@@ -299,22 +303,24 @@ $from = $now - 15 * 24 * 60 * 60 * 1000  # 15天前
 
 #### 查询策略（按检索键分场景）
 
+> **日志级别范围铁律**：查询时必须同时覆盖 ERROR 和 WARN 级别。WARN 日志不可遗漏——许多异常在被捕获后以 WARN 级别记录（如 `catch` 块中 `log.warn(e)` 而非 `log.error(e)`），且 `message` 字段可能包含完整异常堆栈。仅检索 `level:ERROR` 会漏掉这些关键线索。
+
 **场景A：有 traceId 时（以 traceId 为唯一检索键）**
 
 ```
-第1次：traceId + level:ERROR → 精确检索 ERROR 级别日志
-第2次：traceId + level:ERROR + throwable:异常类型 → 加异常类型精确过滤
-第3次：traceId → 放宽 level 条件，查全部级别
-第4次：traceId + message:关键词 → 按消息内容检索
+第1次：traceId AND (level:ERROR OR level:WARN) → 检索 ERROR 和 WARN 级别日志
+第2次：traceId AND (level:ERROR OR level:WARN) AND throwable:异常类型 → 加异常类型精确过滤
+第3次：traceId AND message:关键词 → 按 message 内容检索（message 可能含异常堆栈）
+第4次：traceId → 放宽 level 条件，查全部级别
 第5次：traceId → 仅用 traceId 检索，放宽所有附加条件
 ```
 
 **场景B：无 traceId 但有 corpId 时（corpId 为补充检索键，需搭配其他条件）**
 
 ```
-第1次：corpId + level:ERROR → 按客户企业 + ERROR 级别检索
-第2次：corpId + level:ERROR + throwable:异常类型 → 加异常类型精确过滤
-第3次：corpId + message:关键词 → 按消息内容检索
+第1次：corpId AND (level:ERROR OR level:WARN) → 按客户企业 + ERROR/WARN 级别检索
+第2次：corpId AND (level:ERROR OR level:WARN) AND throwable:异常类型 → 加异常类型精确过滤
+第3次：corpId AND message:关键词 → 按 message 内容检索（message 可能含异常堆栈）
 第4次：corpId → 放宽 level 条件，查全部级别（corpId 单独使用作为最后手段）
 第5次：corpId + 时间范围缩小 → 缩小时间范围到问题发生时段检索
 ```
@@ -359,12 +365,14 @@ $env:PYTHONUTF8="1"; tccli cls SearchLog --cli-unfold-argument `
 
 | 分析场景 | 关注字段 | 方法 |
 |----------|---------|------|
-| 异常根因 | Results.Content 中的异常堆栈 | 搜索 ERROR/Exception 关键词 |
+| 异常根因 | Results.Content 中的异常堆栈 | 搜索 ERROR/WARN/Exception 关键词 |
+| message 字段分析 | message 中的异常堆栈信息 | message 可能包含完整堆栈，需重点检查，不可忽略 |
+| WARN 日志分析 | WARN 级别日志中的异常信息 | WARN 可能记录了被捕获的异常，需检查 throwable 和 message |
 | 时间线 | DescribeLogHistogram 分布 | 观察错误集中时间段 |
 | 上下文关联 | DescribeLogContext 前后日志 | 查看异常前后系统状态 |
 | 调用链断裂 | SpanList 中 duration 异常的 Span | 按 duration 降序排列 |
 | 慢请求 | MetricData duration_avg | 对比正常时段指标 |
-| 服务崩溃 | ERROR 日志 + OOM/OutOfMemory | 按崩溃时间点检索 |
+| 服务崩溃 | ERROR/WARN 日志 + OOM/OutOfMemory | 按崩溃时间点检索 |
 
 ### 常见问题排查模式
 
@@ -375,7 +383,7 @@ $env:PYTHONUTF8="1"; tccli cls SearchLog --cli-unfold-argument `
 
 **模式二：异常时间排查**
 1. 用 `DescribeLogHistogram` 确认错误日志集中时间段
-2. 用 `SearchLog` 检索该时段 ERROR 日志
+2. 用 `SearchLog` 检索该时段 ERROR/WARN 日志
 3. 用 `DescribeLogContext` 查看关键日志上下文
 
 **模式三：服务性能下降**
