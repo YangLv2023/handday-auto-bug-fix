@@ -252,7 +252,7 @@ tccli apm DescribeGeneralMetricData --cli-unfold-argument --param...
 
 ```bash
 # 查询服务请求数趋势（按时间切片）
-$env:PYTHONUTF8="1"; tccli apm DescribeGeneralMetricData --cli-unfold-argument `
+$env:PYTHONUTF8="1"; tccli apm DescribeGeneralMetricData --region ap-shanghai --cli-unfold-argument `
     --InstanceId apm-instanceKey `
     --ViewName service_metric `
     --Metrics request_count `
@@ -263,7 +263,7 @@ $env:PYTHONUTF8="1"; tccli apm DescribeGeneralMetricData --cli-unfold-argument `
     --Period 1
 
 # 查询接口汇总统计（不按时间切片）
-$env:PYTHONUTF8="1"; tccli apm DescribeGeneralMetricData --cli-unfold-argument `
+$env:PYTHONUTF8="1"; tccli apm DescribeGeneralMetricData --region ap-shanghai --cli-unfold-argument `
     --InstanceId apm-instanceKey `
     --ViewName service_metric `
     --Metrics request_count `
@@ -327,7 +327,7 @@ tccli apm DescribeGeneralOTSpanList --cli-unfold-argument --param...
 
 ```bash
 # 查询某服务最近10分钟的OT调用链
-$env:PYTHONUTF8="1"; tccli apm DescribeGeneralOTSpanList --cli-unfold-argument `
+$env:PYTHONUTF8="1"; tccli apm DescribeGeneralOTSpanList --region ap-shanghai --cli-unfold-argument `
     --InstanceId apm-CVfliqa8U `
     --StartTime 1739864668 `
     --EndTime 1739865268 `
@@ -385,7 +385,7 @@ tccli apm DescribeGeneralSpanList --cli-unfold-argument --param...
 | `OperationName` | String | Span 名称 |
 | `StartTime` | Integer | 产生时间戳（微秒） |
 | `StartTimeMillis` | Integer | 产生时间戳（毫秒） |
-| `Duration` | Integer | 持续耗时（微秒） |
+| `Duration` | Integer | **持续耗时（微秒，需 ÷1000 得毫秒）** |
 | `SpanID` | String | Span ID |
 | `ParentSpanID` | String | 父 Span ID |
 | `Tags` | Array | 标签列表 |
@@ -396,7 +396,7 @@ tccli apm DescribeGeneralSpanList --cli-unfold-argument --param...
 
 ```bash
 # 按 TraceId 查询调用链
-$env:PYTHONUTF8="1"; tccli apm DescribeGeneralSpanList --cli-unfold-argument `
+$env:PYTHONUTF8="1"; tccli apm DescribeGeneralSpanList --region ap-shanghai --cli-unfold-argument `
     --InstanceId apm-52Dpv13GR `
     --StartTime 1742374000 `
     --EndTime 1742374331 `
@@ -406,7 +406,7 @@ $env:PYTHONUTF8="1"; tccli apm DescribeGeneralSpanList --cli-unfold-argument `
     --Limit 100
 
 # 批量查询多个 TraceId
-$env:PYTHONUTF8="1"; tccli apm DescribeGeneralSpanList --cli-unfold-argument `
+$env:PYTHONUTF8="1"; tccli apm DescribeGeneralSpanList --region ap-shanghai --cli-unfold-argument `
     --InstanceId apm-52Dpv13GR `
     --StartTime 1742374000 `
     --EndTime 1742374331 `
@@ -414,6 +414,18 @@ $env:PYTHONUTF8="1"; tccli apm DescribeGeneralSpanList --cli-unfold-argument `
     --Filters.0.Type in `
     --Filters.0.Value "traceId1,traceId2,traceId3" `
     --Limit 100
+
+# 🔥 按耗时降序查询，快速定位瓶颈 Span（Top N 排序）
+$env:PYTHONUTF8="1"; tccli apm DescribeGeneralSpanList --region ap-shanghai --cli-unfold-argument `
+    --InstanceId apm-52Dpv13GR `
+    --StartTime 1742374000 `
+    --EndTime 1742374331 `
+    --Filters.0.Key traceID `
+    --Filters.0.Type = `
+    --Filters.0.Value 663727c6d5d4436dd1fcaa509d0f4dc0 `
+    --OrderBy.Key duration `
+    --OrderBy.Value desc `
+    --Limit 50
 ```
 
 ---
@@ -459,7 +471,7 @@ tccli apm DescribeApmApplicationConfig --cli-unfold-argument --param...
 
 ```bash
 # 查询应用配置
-$env:PYTHONUTF8="1"; tccli apm DescribeApmApplicationConfig --cli-unfold-argument `
+$env:PYTHONUTF8="1"; tccli apm DescribeApmApplicationConfig --region ap-shanghai --cli-unfold-argument `
     --InstanceId apm-eDyXPD6FF `
     --ServiceName java-order-service
 ```
@@ -492,7 +504,9 @@ $env:PYTHONUTF8="1"; tccli apm DescribeApmApplicationConfig --cli-unfold-argumen
 
 ## 帮助命令速查
 
-以下命令均为只读安全命令，可随时执行：
+以下命令均为只读安全命令，可随时执行。
+
+**何时使用**：当查询返回意外结果（如 `TotalCount: 0`）、参数格式不确定、或命令报错时，第一优先执行 `tccli <产品> <接口名> help --detail` 查看参数格式和示例。
 
 ```bash
 # 查看 cls 产品支持的接口

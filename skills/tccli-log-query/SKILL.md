@@ -43,6 +43,10 @@ description: Query Tencent Cloud CLS logs and APM traces via TCCLI for problem d
 > - **正确做法**：聚焦于"通过日志和链路数据发现问题线索"，执行一切必要的只读查询来获取问题线索，绝不触碰写操作
 >
 > **环境选择铁律**：详见 Step 0.5
+>
+> **APM Region 铁律**：所有 APM 命令**必须显式指定 `--region`**，严禁依赖 TCCLI 默认地域。APM 返回 `TotalCount: 0` 时，第一优先排查项就是 `--region` 是否正确。
+> - 生产环境 APM：`--region ap-shanghai`
+> - 测试环境 APM：`--region ap-chengdu`
 
 ---
 
@@ -336,7 +340,7 @@ $env:PYTHONUTF8="1"; tccli cls SearchLog --cli-unfold-argument `
 #### DescribeGeneralSpanList — 按 TraceId 查询调用链（核心命令）
 
 ```bash
-$env:PYTHONUTF8="1"; tccli apm DescribeGeneralSpanList --cli-unfold-argument `
+$env:PYTHONUTF8="1"; tccli apm DescribeGeneralSpanList --region $CLS_PROD_REGION --cli-unfold-argument `
     --InstanceId <APM实例ID> `
     --StartTime <起始时间戳秒> `
     --EndTime <结束时间戳秒> `
@@ -369,6 +373,27 @@ $env:PYTHONUTF8="1"
 ```
 
 在每条 tccli 命令前加上此设置，或在会话开始时统一设置。
+
+### PowerShell 输出重定向编码
+
+PowerShell 的 `>` 重定向符输出的是 **UTF-16 LE** 编码文件（带 BOM `0xFF 0xFE`）。后续用 Python `json.load()` 读取时如果不指定 `encoding='utf-16'` 会报 `UnicodeDecodeError`。
+
+**推荐做法**：用 `| Out-File -Encoding utf8` 替代 `>` 重定向：
+
+```powershell
+# ❌ 错误：> 重定向输出 UTF-16 LE
+$env:PYTHONUTF8="1"; tccli apm DescribeGeneralSpanList --region ap-shanghai --cli-unfold-argument ... > output.json
+
+# ✅ 正确：Out-File 指定 UTF-8
+$env:PYTHONUTF8="1"; tccli apm DescribeGeneralSpanList --region ap-shanghai --cli-unfold-argument ... | Out-File -Encoding utf8 output.json
+```
+
+如已用 `>` 重定向，Python 读取时需指定编码：
+
+```python
+with open('output.json', 'r', encoding='utf-16') as f:
+    data = json.load(f)
+```
 
 ### 时间戳转换
 
@@ -499,6 +524,25 @@ $env:PYTHONUTF8="1"; tccli cls SearchLog --cli-unfold-argument `
 | 5次查询均无结果 | 告知用户日志可能已过期或未打印，返回查询条件摘要 |
 | Windows 中文乱码 | 确认已设置 `$env:PYTHONUTF8="1"` |
 | 配额超限 | 降低查询频率，单主题并发不超过15 |
+| **APM 查询返回 TotalCount: 0（即使无 Filter）** | ①检查 `--region` → ②检查 `--InstanceId` 是否带 `apm-` 前缀 → ③用 `tccli apm DescribeGeneralSpanList help --detail` 查看参数格式 → ④检查 `tccli configure list` 确认当前 region 默认值 → ⑤用 `DescribeApmInstances` 确认实例存在 |
+
+### 查询失败自救口诀
+
+当查询持续返回空结果或报错时，按以下顺序排查：
+
+1. **先查 help**：`tccli apm <接口名> help --detail` — 看参数格式、示例、必填项
+2. **再查 region**：`tccli configure list` — 确认默认 region 是否匹配目标环境
+3. **后查实例**：`tccli apm DescribeApmInstances` — 确认实例存在且有权限
+4. **最后排查**：缩小时间范围、去掉所有 Filter 测试基础连通性
+
+### APM 返回 TotalCount: 0 的排错速查
+
+| 检查项 | 命令 | 判断 |
+|--------|------|------|
+| Region 是否正确 | `tccli configure list` 查看默认 region | 默认可能是 ap-guangzhou，APM 需显式指定 |
+| 实例是否存在 | `tccli apm DescribeApmInstances --region <目标region>` | 确认 InstanceId 带 `apm-` 前缀 |
+| 时间范围是否覆盖 | 从控制台 URL 获取 from/to 参数 | 毫秒转秒：除以 1000 |
+| 权限是否足够 | `DescribeApmInstances` 能返回但 SpanList 返回 0 | 可能是子账号权限不足 |
 
 ---
 
