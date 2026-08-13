@@ -198,6 +198,8 @@ $env:PYTHONUTF8="1"; tccli cls DescribeLogContext --cli-unfold-argument `
 
 ## APM 应用性能监控
 
+> **⚠️ 按需启用**：以下 APM 命令**默认不执行**。仅当用户明确要求链路分析、性能问题排查，或 CLS 日志检索不足以确认根因且经用户确认后，才启用。常规 traceId 查询仅需完成 CLS 日志检索即可。→ 启用条件详见 [SKILL.md](SKILL.md) 铁律「APM 查询按需启用铁律」和 Step 3.2「启用门槛判断」。
+
 ### DescribeGeneralMetricData — 指标数据查询
 
 获取 APM 指标数据，支持灵活的过滤和聚合。

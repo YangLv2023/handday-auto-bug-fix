@@ -9,19 +9,24 @@ description: Query Tencent Cloud CLS logs and APM traces via TCCLI for problem d
 
 > **⚠️ 路由规则（加载前必须判断）**：
 >
-> 本 skill **仅限 `tencent-cloud-troubleshooter` subagent 加载和执行**。在加载本 skill 之前，必须先判断当前角色：
+> 本 skill **首选由 `tencent-cloud-troubleshooter` subagent 加载和执行**。在加载本 skill 之前，请按以下优先级判断当前角色与执行方式：
 >
-> | 当前角色 | 是否允许加载本 skill | 正确做法 |
-> |----------|---------------------|---------|
-> | `tencent-cloud-troubleshooter` subagent | ✅ 允许 | 直接加载并执行本 skill |
-> | PM（主编排 Agent） | 🚫 **禁止** | 立即停止加载，改为派发 `tencent-cloud-troubleshooter` subagent，或加载 `handday-auto-bug-fix` 进入完整编排流程 |
-> | 其他 subagent | 🚫 **禁止** | 立即停止加载，将日志查询需求交由 PM 协调派发 `tencent-cloud-troubleshooter` subagent |
+> | 当前角色 | 执行方式 |
+> |----------|---------|
+> | `tencent-cloud-troubleshooter` subagent | ✅ 直接加载并执行本 skill |
+> | PM（主编排 Agent） | 优先派发 `tencent-cloud-troubleshooter` subagent；若该 subagent 尚未生成，按下方**降级策略**处理，不得因 subagent 不存在而放弃查询 |
+> | 其他 subagent | 将日志查询需求交由 PM 协调派发 `tencent-cloud-troubleshooter` subagent |
 >
-> **如果你不是 `tencent-cloud-troubleshooter` subagent，请立即停止，不要继续加载本 skill。**
+> **降级策略（当 `tencent-cloud-troubleshooter` subagent 不可用时，按顺序尝试）**：
+>
+> 1. **从模板创建 subagent**：将本 skill 目录下的 `agents/tencent-cloud-troubleshooter.md` 模板复制到当前环境的 agents 目录（Qoder: `~/.qoder/agents/`；Workbuddy: `~/.workbuddy/agents/`），创建后派发任务
+> 2. **使用默认 subagent**：若模板创建失败或环境不支持 subagent 创建，可直接启用一个具备 `Bash`、`Read` 工具的默认 subagent 加载本 skill 执行查询
+>
+> **关键原则**：路由规则的目的是优先使用专业 subagent 隔离执行，而非在 subagent 不可用时阻塞查询。降级执行时仍须遵守本 skill 所有铁律（只读查询、环境选择、重试限制等）。
 
-> **归属声明**：本 skill 是 `tencent-cloud-troubleshooter` subagent 的**专属内部依赖 skill**，不是 PM 或其他 subagent 的可用工具。
-> - 在 `handday-auto-bug-fix` 编排流程中：仅 `tencent-cloud-troubleshooter` subagent 有权加载和使用本 skill。PM（主编排 Agent）不得直接加载或执行本 skill 中的任何命令，必须通过派发 subagent 完成。
-> - 即使用户独立触发日志查询（未通过 handday-auto-bug-fix 流程），PM 也应派发 `tencent-cloud-troubleshooter` subagent 执行查询，不应直接加载本 skill。
+> **归属声明**：本 skill 是 `tencent-cloud-troubleshooter` subagent 的**首选内部依赖 skill**。
+> - 在 `handday-auto-bug-fix` 编排流程中：PM 应优先派发 `tencent-cloud-troubleshooter` subagent 加载和使用本 skill。若该 subagent 尚未生成，按降级策略处理（从模板创建或使用默认 subagent），不应因 subagent 缺失而阻塞查询。
+> - 即使用户独立触发日志查询（未通过 handday-auto-bug-fix 流程），也应优先派发 `tencent-cloud-troubleshooter` subagent 执行查询；subagent 不可用时按降级策略处理。
 
 ## 铁律（不可违反）
 
@@ -47,6 +52,13 @@ description: Query Tencent Cloud CLS logs and APM traces via TCCLI for problem d
 > **APM Region 铁律**：所有 APM 命令**必须显式指定 `--region`**，严禁依赖 TCCLI 默认地域。APM 返回 `TotalCount: 0` 时，第一优先排查项就是 `--region` 是否正确。
 > - 生产环境 APM：`--region ap-shanghai`
 > - 测试环境 APM：`--region ap-chengdu`
+>
+> **APM 查询按需启用铁律**：APM 链路查询（`DescribeGeneralOTSpanList`、`DescribeGeneralSpanList`、`DescribeGeneralMetricData` 等）**默认不执行**，仅在以下条件之一满足时才启用：
+> 1. 用户**明确要求**进行链路分析、调用链追踪或 APM 数据查询（如"查链路"、"查trace"、"看调用链"、"分析调用链"）
+> 2. 用户**明确要求**进行性能问题排查以定位性能瓶颈（如"性能分析"、"慢请求分析"、"耗时分析"）
+> 3. CLS 日志检索结果不足以确认问题根因，且经用户确认需要补充链路数据时
+>
+> **常规 traceId 查询场景**（用户仅提供 traceId 查询基本问题信息）**只执行 CLS 日志检索**，不执行任何 APM 命令。这样可以避免不必要的 API 调用，提高查询效率，减少资源消耗。
 
 ---
 
@@ -100,9 +112,10 @@ Step 0: 需求澄清 → Step 0.5: 环境选择 → Step 1: 环境检查 → Ste
 
 | 用户表述 | 判断结果 | 处理方式 |
 |----------|---------|---------|
-| 明确提到"查日志"、"看日志"、"检索日志" | 意图明确：查询日志 | 直接进入 Step 1 |
-| 明确提到"查链路"、"查trace"、"看调用链" | 意图明确：查询链路 | 直接进入 Step 1 |
-| 明确提到 traceId 且要求同时查日志和链路 | 意图明确：两者都查 | 直接进入 Step 1 |
+| 明确提到"查日志"、"看日志"、"检索日志" | 意图明确：查询日志 | 直接进入 Step 1，**仅执行 CLS 检索** |
+| 明确提到"查链路"、"查trace"、"看调用链" | 意图明确：查询链路 | 直接进入 Step 1，**启用 APM 链路查询** |
+| 明确提到 traceId 且要求同时查日志和链路 | 意图明确：两者都查 | 直接进入 Step 1，先 CLS 后 APM |
+| 只提供 traceId，未明确要求查链路 | 意图明确：**常规日志查询** | 直接进入 Step 1，**默认仅执行 CLS 检索，不执行 APM** |
 | 只说"排查问题"、"看看什么情况"、"帮我查一下" | **意图模糊** | 必须澄清 |
 | 只给了 bug 描述/工单但未说明要查什么 | **意图模糊** | 必须澄清 |
 
@@ -111,21 +124,23 @@ Step 0: 需求澄清 → Step 0.5: 环境选择 → Step 1: 环境检查 → Ste
 当意图模糊时，向用户说明并要求选择：
 
 > 「请问您需要我执行哪种查询？
-> 1. **查询日志** — 通过 CLS 检索日志，获取报错信息、异常堆栈、关键业务日志等有用信息
-> 2. **查询链路** — 通过 APM 查询调用链，分析请求耗时、服务调用关系、Span 详情
+> 1. **查询日志**（默认） — 通过 CLS 检索日志，获取报错信息、异常堆栈、关键业务日志等有用信息
+> 2. **查询链路**（按需启用） — 通过 APM 查询调用链，分析请求耗时、服务调用关系、Span 详情。仅当您需要链路分析或性能问题排查时才需要启用
 >
-> 如果不确定，建议先查日志获取有用信息，再查链路进行深入分析。请提供 **traceId**（必填）或 **corpId**（无 traceId 时尽量提供）以便查询。」
+> 如果不确定，建议先查日志获取有用信息即可，链路查询仅在需要深入分析根因或性能瓶颈时再启用。请提供 **traceId**（必填）或 **corpId**（无 traceId 时尽量提供）以便查询。」
 
 ### 澄清后处理
 
 | 用户选择 | 后续动作 |
 |----------|---------|
-| 查询日志 | 重点走 CLS 查询路径（SearchLog → DescribeLogHistogram → DescribeLogContext） |
-| 查询链路 | 重点走 APM 查询路径（DescribeGeneralSpanList → DescribeGeneralOTSpanList → DescribeGeneralMetricData） |
+| 查询日志 | 仅走 CLS 查询路径（SearchLog → DescribeLogHistogram → DescribeLogContext），**不执行 APM 命令** |
+| 查询链路 | 启用 APM 查询路径（DescribeGeneralSpanList → DescribeGeneralOTSpanList → DescribeGeneralMetricData） |
 | 两者都查 | 先查日志获取信息线索，再查链路进行深入分析 |
-| 仍未明确 | 默认先查询日志（更快速获取问题线索），有需要再查链路 |
+| 仍未明确 | **默认仅查询日志**（更快速获取问题线索），APM 链路查询仅在用户后续明确要求时再启用 |
 
 > **注意**：无论选择哪种，**traceId 为首选检索键**。有 traceId 时以 traceId 检索（不需要 corpId）；无 traceId 时需尽量获取 corpId 作为补充检索键（corpId 通常需搭配 level、message、throwable 等条件组合检索，不宜单独使用）。若用户两者都未提供，需在澄清时一并要求，尽可能获取 corpId。
+>
+> **APM 按需启用提醒**：当用户仅提供 traceId 进行常规问题查询（未明确要求链路分析或性能排查）时，**默认只执行 CLS 日志检索**，不执行任何 APM 命令。APM 链路查询仅在用户明确表达需要链路分析、性能分析或调用链追踪时才启用。
 
 ---
 
@@ -269,7 +284,7 @@ tccli cls SearchLog --cli-unfold-argument `
 |----------|---------|---------|
 | 异常堆栈 | 异常类型、类名、方法名 | 结合 traceId 检索 CLS 日志 |
 | 工单/Bug描述 | traceId、corpId、报错时间 | 有 traceId 用 traceId，无 traceId 用 corpId 检索 |
-| traceId | 完整 traceId | **首选检索键**，有 traceId 时优先使用，用于 CLS 日志检索和 APM Span 链路查询 |
+| traceId | 完整 traceId | **首选检索键**，有 traceId 时优先使用，**默认用于 CLS 日志检索**；APM Span 链路查询仅在用户明确要求时按需启用 |
 | 错误码 | HTTP状态码、业务错误码 | 结合 traceId 过滤检索 |
 | 服务崩溃 | 崩溃时间、服务名、OOM/异常退出 | 结合 traceId 按时间范围检索 |
 
@@ -292,6 +307,8 @@ tccli cls SearchLog --cli-unfold-argument `
 > **重要**：CLS 日志查询的主题和地域根据 Step 0.5 选择的环境确定，TopicId 和 Region 均从 `.env` 文件读取。不查询其他日志主题。
 >
 > **APM 链路查询限制**：APM 链路查询（DescribeGeneralSpanList 等）**仅支持 traceId 检索**，不支持 corpId。当只有 corpId 无 traceId 时，仅执行 CLS 日志检索，跳过 APM 链路查询。
+>
+> **APM 链路查询按需启用**：即使有 traceId，APM 链路查询也**默认不执行**。仅当用户明确要求链路分析、性能问题排查，或 CLS 日志检索不足以确认根因且经用户确认后，才启用 APM 相关命令（DescribeGeneralOTSpanList、DescribeGeneralSpanList 等）。常规 traceId 查询仅执行 CLS 日志检索即可。
 
 ---
 
@@ -335,7 +352,21 @@ $env:PYTHONUTF8="1"; tccli cls SearchLog --cli-unfold-argument `
 
 > 详细参数和示例 → 详见 [api-reference.md](api-reference.md)
 
-### 3.2 APM 链路查询
+### 3.2 APM 链路查询（按需启用）
+
+> **⚠️ 启用门槛判断（执行 APM 命令前必须检查）**：
+>
+> 在执行以下任何 APM 命令之前，必须先确认是否满足启用条件：
+>
+> | 判断条件 | 是否启用 APM |
+> |----------|-------------|
+> | 用户明确要求"查链路"、"查trace"、"看调用链"、"链路分析" | ✅ 启用 |
+> | 用户明确要求"性能分析"、"慢请求"、"耗时分析"、"性能瓶颈" | ✅ 启用 |
+> | CLS 日志检索结果不足以确认根因，且经用户确认需要补充链路数据 | ✅ 启用 |
+> | 用户仅提供 traceId 进行常规问题查询，未明确要求链路或性能分析 | ❌ **不启用，仅执行 CLS 日志检索** |
+> | 仅有 corpId 无 traceId | ❌ **不启用**（APM 不支持 corpId 检索） |
+>
+> **默认行为**：常规 traceId 查询场景下，跳过本节所有 APM 命令，仅完成 3.1 CLS 日志检索即可。
 
 #### DescribeGeneralSpanList — 按 TraceId 查询调用链（核心命令）
 
@@ -359,6 +390,8 @@ $env:PYTHONUTF8="1"; tccli apm DescribeGeneralSpanList --region $CLS_PROD_REGION
 > 详细参数和示例 → 详见 [api-reference.md](api-reference.md)
 
 > **APM 链路查询限制**：仅支持 traceId 检索，不支持 corpId。当只有 corpId 无 traceId 时，仅执行 CLS 日志检索。
+>
+> **APM 链路查询按需启用**：即使有 traceId，APM 链路查询也**默认不执行**。仅当用户明确要求链路分析、性能问题排查，或 CLS 日志检索不足以确认根因且经用户确认后，才启用本节 APM 命令。常规 traceId 查询仅完成 3.1 CLS 日志检索即可，避免不必要的 API 调用。
 
 ---
 
@@ -446,6 +479,12 @@ $from = $now - 15 * 24 * 60 * 60 * 1000  # 15天前
 
 > **corpId 使用要点**：corpId 通常是缩小客户企业范围的补充条件，不宜单独作为唯一检索项。前几次查询应尽量搭配 level、throwable、message 等条件，最后才放宽到仅用 corpId。
 
+> **APM 链路查询为可选附加步骤**：上述5次查询策略仅涉及 CLS 日志检索。APM 链路查询（DescribeGeneralSpanList 等）**不包含在默认5次查询中**，仅当满足以下条件之一时，在 CLS 检索完成后**额外执行**：
+> 1. 用户明确要求链路分析或性能问题排查
+> 2. CLS 日志检索结果不足以确认根因，且经用户确认需要补充链路数据
+>
+> 常规 traceId 查询场景下，完成上述 CLS 检索即可返回结果，**不执行任何 APM 命令**。
+
 #### 执行规则
 
 1. 每次查询使用不同的条件组合，逐步放宽过滤条件
@@ -495,20 +534,22 @@ $env:PYTHONUTF8="1"; tccli cls SearchLog --cli-unfold-argument `
 
 ### 常见问题排查模式
 
-**模式一：traceId 追踪**
+**模式一：traceId 追踪**（⚠️ 需用户明确要求链路分析时才启用，涉及 APM 命令）
 1. 用 traceId 查 `DescribeGeneralSpanList` 获取完整调用链
 2. 找到耗时最长或报错的 Span
 3. 用 Span 时间戳查对应 CLS 日志确认根因
 
-**模式二：异常时间排查**
+**模式二：异常时间排查**（✅ 默认模式，仅 CLS 命令）
 1. 用 `DescribeLogHistogram` 确认错误日志集中时间段
 2. 用 `SearchLog` 检索该时段 ERROR/WARN 日志
 3. 用 `DescribeLogContext` 查看关键日志上下文
 
-**模式三：服务性能下降**
+**模式三：服务性能下降**（⚠️ 需用户明确要求性能分析时才启用，涉及 APM 命令）
 1. 用 `DescribeGeneralMetricData` 查看 request_count/duration_avg 趋势
 2. 对比正常时段与异常时段指标
 3. 用 `DescribeApmApplicationConfig` 确认探针配置是否变更
+
+> **模式选择说明**：常规 traceId 查询默认使用**模式二**（仅 CLS 日志检索）。模式一和模式三涉及 APM 命令，仅当用户明确要求链路分析或性能排查时才启用。
 
 ---
 
@@ -551,12 +592,13 @@ $env:PYTHONUTF8="1"; tccli cls SearchLog --cli-unfold-argument `
 1. **需求澄清** — 用户需求模糊时必须先要求明确：查日志还是查链路（详见 Step 0）
 2. **只读查询** — 执行一切必要的只读查询，坚决不执行任何增删改操作（详见铁律）
 3. **检索键优先级** — traceId 优先，corpId 补充（详见 Step 2）
-4. **环境选择** — 按来源选定环境，禁止两边都查（详见 Step 0.5）
-5. **重试上限** — 最多5次不同查询，禁止无限循环（详见 Step 4）
-6. **环境依赖** — TCCLI 未就绪时引导用户使用 `/tccli-setup` 技能；认证异常自动恢复（详见 Step 1）
-7. **时间约束** — 默认查询15天范围，最大不超过30天
-8. **编码优先** — Windows 下每条 tccli 命令前必须设置 `$env:PYTHONUTF8="1"` 避免中文乱码
-9. **时间精度** — CLS 用毫秒时间戳，APM 用秒时间戳，切勿混淆
+4. **APM 按需启用** — 常规 traceId 查询默认仅执行 CLS 日志检索，APM 链路查询仅在用户明确要求链路分析或性能排查时才启用，避免不必要的 API 调用（详见铁律 & Step 3.2）
+5. **环境选择** — 按来源选定环境，禁止两边都查（详见 Step 0.5）
+6. **重试上限** — 最多5次不同查询，禁止无限循环（详见 Step 4）
+7. **环境依赖** — TCCLI 未就绪时引导用户使用 `/tccli-setup` 技能；认证异常自动恢复（详见 Step 1）
+8. **时间约束** — 默认查询15天范围，最大不超过30天
+9. **编码优先** — Windows 下每条 tccli 命令前必须设置 `$env:PYTHONUTF8="1"` 避免中文乱码
+10. **时间精度** — CLS 用毫秒时间戳，APM 用秒时间戳，切勿混淆
 
 ---
 

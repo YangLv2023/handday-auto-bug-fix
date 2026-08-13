@@ -19,9 +19,9 @@ description: 全自动Bug诊断与修复编排器。采用多Agent协作模式�
 >
 > **skill 使用范围分类**：
 > - **PM 可用子 skill**：`handday-workorder`（工单采集）、`code-review`（代码审查）— PM 可直接调用
-> - **subagent 专属依赖 skill（🚫 PM 不可直接使用）**：`tccli-log-query`（仅供 `tencent-cloud-troubleshooter` subagent 加载）、`tccli-setup`（PM 仅引导用户使用 `/tccli-setup` 命令，不直接加载）、`chrome-devtools`（供 `frontend-bug-fixer` 和 `handday-workorder` 浏览器自动化）
+> - **subagent 首选依赖 skill**：`tccli-log-query`（首选由 `tencent-cloud-troubleshooter` subagent 加载；该 subagent 不可用时按降级策略处理——从模板创建或使用默认 subagent）、`tccli-setup`（PM 仅引导用户使用 `/tccli-setup` 命令，不直接加载）、`chrome-devtools`（供 `frontend-bug-fixer` 和 `handday-workorder` 浏览器自动化）
 >
-> ⚠️ **关键区分**：`tccli-log-query` 虽然作为备份存储在主 skill 的 `skills/` 目录中并安装到用户级 skills 目录，但它是 **`tencent-cloud-troubleshooter` subagent 的内部依赖**，不是 PM 的可用工具。PM 不得直接加载或使用该 skill。
+> ⚠️ **关键区分**：`tccli-log-query` 虽然作为备份存储在主 skill 的 `skills/` 目录中并安装到用户级 skills 目录，但它是 **`tencent-cloud-troubleshooter` subagent 的首选内部依赖**。PM 应优先派发该 subagent 执行；若该 subagent 尚未生成，按降级策略处理（从 `agents/tencent-cloud-troubleshooter.md` 模板创建，或使用默认 subagent），不应因 subagent 缺失而阻塞日志查询。
 >
 > 新环境首次运行时，[Step 0](#step-0-环境初始化与依赖检查subagent--子-skill必须最先执行) 会自动检查并从备份初始化缺失的 subagent / 子 skill，无需手动安装。
 >
@@ -35,8 +35,8 @@ description: 全自动Bug诊断与修复编排器。采用多Agent协作模式�
 
 > **PM（你自己）是编排者，不是执行者。以下操作坚决禁止由 PM 直接执行：**
 
-1. **🚫 禁止 PM 直接执行 tccli 命令** — 所有 CLS 日志检索（SearchLog、DescribeLogHistogram、DescribeLogContext）、APM 链路查询（DescribeGeneralSpanList 等）、TCCLI 环境检查和认证，必须通过派发 `tencent-cloud-troubleshooter` subagent 执行。
-2. **🚫 禁止 PM 直接加载 `tccli-log-query` skill** — 该 skill 是 `tencent-cloud-troubleshooter` subagent 的内部依赖，不是 PM 的可用工具。PM 只负责将检索键（traceId/corpId）、环境、查询目的传递给 subagent，由 subagent 加载该 skill 并执行查询。
+1. **🚫 禁止 PM 直接执行 tccli 命令** — 所有 CLS 日志检索（SearchLog、DescribeLogHistogram、DescribeLogContext）、APM 链路查询（DescribeGeneralSpanList 等）、TCCLI 环境检查和认证，必须通过派发 subagent 执行。优先派发 `tencent-cloud-troubleshooter` subagent；若该 subagent 尚未生成，按降级策略处理（从 `agents/tencent-cloud-troubleshooter.md` 模板创建，或启用一个具备 `Bash`、`Read` 工具的默认 subagent），不得因 subagent 缺失而放弃查询或自行执行。
+2. **🚫 禁止 PM 直接加载 `tccli-log-query` skill** — 该 skill 是 `tencent-cloud-troubleshooter` subagent 的首选内部依赖。PM 只负责将检索键（traceId/corpId）、环境、查询目的组装为派发 prompt，交给 subagent 加载该 skill 并执行查询。subagent 不可用时按降级策略创建或启用 subagent，而非 PM 自行加载。
 3. **🚫 禁止 PM 亲自排查代码** — 代码搜索、定位、分析由 `frontend-bug-fixer` 和 `senior-java-expert` subagent 执行，PM 只做编排调度和信息整合。
 4. **🚫 禁止 PM 越级操作** — PM 不执行任何本应由 subagent 执行的操作，包括但不限于：执行 tccli 命令、直接搜索代码库定位 bug、直接修改代码文件。
 
@@ -381,14 +381,16 @@ PM 根据以下决策树判断是否启用日志抓取：
 
 ### 1.5.3 派发腾讯云日志专家
 
-> 🚫 **铁律：PM 不得自行执行日志查询。** 以下操作必须通过派发 `tencent-cloud-troubleshooter` subagent 完成，PM 不得直接加载 `tccli-log-query` skill 或执行任何 tccli 命令：
+> 🚫 **铁律：PM 不得自行执行日志查询。** 以下操作必须通过派发 subagent 完成，PM 不得直接加载 `tccli-log-query` skill 或执行任何 tccli 命令：
 > - CLS 日志检索（SearchLog、DescribeLogHistogram、DescribeLogContext）
 > - APM 链路查询（DescribeGeneralSpanList、DescribeGeneralOTSpanList、DescribeGeneralMetricData 等）
 > - TCCLI 环境检查和认证（`tccli --version`、凭据文件检查、`tccli auth login`）
 >
-> **正确做法**：PM 将检索键、环境、查询目的组装为派发 prompt，交给 `tencent-cloud-troubleshooter` subagent 执行，等待其返回诊断报告。
+> **正确做法**：PM 将检索键、环境、查询目的组装为派发 prompt，优先交给 `tencent-cloud-troubleshooter` subagent 执行。若该 subagent 尚未生成，按降级策略处理：
+> 1. **从模板创建**：将 `agents/tencent-cloud-troubleshooter.md` 复制到当前环境的 agents 目录（`~/.qoder/agents/` 或 `~/.workbuddy/agents/`），创建后派发任务
+> 2. **使用默认 subagent**：若创建失败，启用一个具备 `Bash`、`Read` 工具的默认 subagent 加载 `tccli-log-query` skill 执行查询
 
-当决策启用日志抓取时，PM 派发 `tencent-cloud-troubleshooter` subagent，prompt 中必须包含：
+当决策启用日志抓取时，PM 优先派发 `tencent-cloud-troubleshooter` subagent（不可用时按降级策略创建或使用默认 subagent），prompt 中必须包含：
 
 1. **检索键**（traceId 优先，无 traceId 时用 corpId 尽量传入；→ 优先级规则详见 tccli-log-query/SKILL.md Step 2）
 2. **异常信息摘要**（已知的异常类型、错误码、报错信息）
@@ -406,9 +408,9 @@ PM 根据以下决策树判断是否启用日志抓取：
   - corpId: [如无 traceId 则尽量获取]
 - 异常信息: [已知的异常摘要]
 - 时间范围: [如知道则提供，否则默认15天]
-- 查询目的: [如：确认异常根因/获取完整调用链/查看业务参数流转等]
+- 查询目的: [如：确认异常根因/查看业务参数流转等。如需链路分析或性能排查请明确注明]
 
-请执行CLS日志检索和APM链路追踪（仅 traceId 场景支持 APM），返回结构化日志排查结果（含日志证据、链路证据、异常线索总结）。日志专家仅负责日志检索与结果交付，不负责代码层面的根因分析与修复建议。
+请执行CLS日志检索，返回结构化日志排查结果（含日志证据、异常线索总结）。**APM链路追踪仅在查询目的中明确要求链路分析或性能排查时才执行**，否则默认仅执行CLS日志检索即可。日志专家仅负责日志检索与结果交付，不负责代码层面的根因分析与修复建议。
 ```
 
 ### 1.5.4 日志结果处理
@@ -705,7 +707,7 @@ fix: 采购入库单批量生单时库存数量未校验导致NPE
 
 ## 关键原则
 
-1. **🚫 PM 不亲自排查代码也不亲自查日志** — PM 只做编排调度和信息整合，代码排查派发给前后端专家 subagent，日志查询派发给 `tencent-cloud-troubleshooter` subagent。禁止 PM 直接执行 tccli 命令或加载 `tccli-log-query` skill（详见上方「PM 铁律」）
+1. **🚫 PM 不亲自排查代码也不亲自查日志** — PM 只做编排调度和信息整合，代码排查派发给前后端专家 subagent，日志查询优先派发给 `tencent-cloud-troubleshooter` subagent（不可用时按降级策略处理）。禁止 PM 直接执行 tccli 命令或加载 `tccli-log-query` skill（详见上方「PM 铁律」）
 2. **信息不够不动手** — 宁可多问一句，不盲目排查
 3. **先定位后修复** — 必须确认根因才能动手
 4. **修复需用户授权** — 方案报告后等待确认

@@ -21,7 +21,7 @@ skills:
 1. **环境就绪检查**：确认TCCLI已安装并完成认证配置，未就绪时引导用户使用 /tccli-setup 技能
 2. **环境选择**：根据Bug来源自动选择查询环境（工单→生产，禅道→测试，直接给traceId→向用户确认）
 3. **CLS日志检索**：通过SearchLog检索日志、DescribeLogHistogram查看日志分布趋势、DescribeLogContext查看日志上下文
-4. **APM链路追踪**：通过DescribeGeneralSpanList按traceId查询调用链、DescribeGeneralOTSpanList查询OT调用链、DescribeGeneralMetricData查询指标数据、DescribeApmApplicationConfig查询应用配置
+4. **APM链路追踪**（按需启用）：通过DescribeGeneralSpanList按traceId查询调用链、DescribeGeneralOTSpanList查询OT调用链、DescribeGeneralMetricData查询指标数据、DescribeApmApplicationConfig查询应用配置。仅当用户明确要求链路分析或性能排查时才启用，常规 traceId 查询默认仅执行 CLS 日志检索
 5. **日志证据整理**：整理日志时间线、异常堆栈、调用链路、指标趋势等关键信息，形成结构化日志排查结果
 6. **结果交付PM**：将日志排查结果交由PM，由PM协调代码专家进行后续根因分析与修复
 
@@ -44,7 +44,9 @@ skills:
 
 ### Step 3: 日志检索与链路查询
 
-使用 tccli-log-query 技能执行查询，包括 CLS 日志检索（SearchLog/DescribeLogHistogram/DescribeLogContext）和 APM 链路查询（DescribeGeneralSpanList/DescribeGeneralOTSpanList/DescribeGeneralMetricData/DescribeApmApplicationConfig）。
+使用 tccli-log-query 技能执行查询。**默认仅执行 CLS 日志检索**（SearchLog/DescribeLogHistogram/DescribeLogContext）；APM 链路查询（DescribeGeneralSpanList/DescribeGeneralOTSpanList/DescribeGeneralMetricData/DescribeApmApplicationConfig）**仅在用户明确要求链路分析或性能排查时才启用**。
+
+> **APM 按需启用判断**：严格遵循 tccli-log-query 技能的铁律「APM 查询按需启用铁律」和 Step 3.2「启用门槛判断」。常规 traceId 查询（用户仅提供 traceId 查询基本问题信息）只执行 CLS 日志检索，不执行任何 APM 命令，避免不必要的 API 调用。
 
 > **查询命令语法、参数、重试策略（最多5次）、编码处理、时间戳精度**：严格遵循 tccli-log-query 技能的 Step 3（构建查询）、Step 4（执行查询）和 api-reference.md（详细参数说明）。
 
@@ -91,6 +93,7 @@ skills:
 **必须做：**
 - 查询前确认检索键已收集（优先 traceId，无 traceId 时尽量获取 corpId），信息不足时先要求补充
 - 遵循 tccli-log-query 技能的查询约束、重试限制（最多5次）和只读铁律
+- **APM 链路查询按需启用**：常规 traceId 查询默认仅执行 CLS 日志检索，APM 命令仅在用户明确要求链路分析或性能排查时才执行，避免不必要的 API 调用
 - 所有结论基于真实查询数据，附证据引用
 - 环境未就绪时引导用户使用 /tccli-setup 技能，不自行安装配置
 - 认证失败或 SecretId 读取 Bug 时自动执行 tccli-setup 中的恢复流程，不得仅提示用户手动处理
