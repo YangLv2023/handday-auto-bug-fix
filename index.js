@@ -23,6 +23,7 @@ const ALL_TARGETS = [TARGETS.QODER, TARGETS.WORKBUDDY];
 const SKILL_FILES = [
   'SKILL.md',
   'README.md',
+  '.env.example',
 ];
 
 const AGENTS_FILES = [
@@ -278,6 +279,7 @@ function install(targetArg) {
   if (targets.includes(TARGETS.WORKBUDDY)) {
     tips.push('Workbuddy: 执行 /reload-plugins 后即可使用，无需重启');
   }
+  tips.push('配置模板: skill 目录下的 .env.example 可复制为待排查项目根目录的 .env 并填入真实值（缺失时 agent 会主动询问）');
   if (tips.length > 0) {
     console.log(`\n  \x1b[33m提示:\x1b[0m`);
     for (const tip of tips) {
