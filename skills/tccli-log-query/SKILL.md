@@ -331,8 +331,10 @@ $env:PYTHONUTF8="1"; tccli cls SearchLog --cli-unfold-argument `
     --From <起始时间戳毫秒> `
     --To <结束时间戳毫秒> `
     --QueryString 'traceId:<traceId值>' `
-    --Limit 100 --Sort desc
+    --Limit 1000 --Sort desc
 ```
+
+> `--Limit` 单页大小，API 上限 1000，默认取上限以减少请求次数。
 
 **检索语法（CQL）**：
 - 有 traceId：`traceId:abc123`（唯一检索键，不需要 corpId）
@@ -349,6 +351,8 @@ $env:PYTHONUTF8="1"; tccli cls SearchLog --cli-unfold-argument `
 |------|------|---------|
 | `DescribeLogHistogram` | 日志分布趋势 | `--Interval`（毫秒）、`--Query`、`--SyntaxRule 1` |
 | `DescribeLogContext` | 日志上下文 | `--BTime`、`--PkgId`、`--PkgLogId`（来自 SearchLog 返回） |
+
+> **DescribeLogContext 使用限制**：仅在关键日志缺失上下文（如异常堆栈被截断、需要确认异常前后系统状态）时使用；其入参 PkgId/PkgLogId 属于内部检索参数，**不得出现在最终输出中**。
 
 > 详细参数和示例 → 详见 [api-reference.md](api-reference.md)
 
@@ -459,6 +463,8 @@ $from = $now - 15 * 24 * 60 * 60 * 1000  # 15天前
 
 **场景A：有 traceId 时（以 traceId 为唯一检索键）**
 
+> 该策略为**递进兜底策略**，任一步命中且证据足够即停止（见执行规则「早停铁律」）。
+
 ```
 第1次：traceId AND (level:ERROR OR level:WARN) → 检索 ERROR 和 WARN 级别日志
 第2次：traceId AND (level:ERROR OR level:WARN) AND throwable:异常类型 → 加异常类型精确过滤
@@ -487,11 +493,13 @@ $from = $now - 15 * 24 * 60 * 60 * 1000  # 15天前
 
 #### 执行规则
 
-1. 每次查询使用不同的条件组合，逐步放宽过滤条件
-2. 5次查询后有结果则返回；无结果也**必须停止并告知用户**
-3. **坚决禁止**无限循环、反复尝试相同条件
-4. 查询失败（接口报错、超时）同样计入5次限制，不额外增加重试
-5. 返回结果时说明：已尝试了哪些查询条件，最终是否获取到日志
+1. **早停铁律**：任一查询命中后，先评估命中内容是否足以概括问题（异常类型、发生位置、关键 message/堆栈业务帧齐备）。足以概括 → **立即停止查询，进入结果整理输出**；不足以概括 → 才允许执行下一次不同条件的查询。严禁在证据已足够后以"核对完整性"、"补全时间线"为由继续查询。
+2. 每次查询使用不同的条件组合，逐步放宽过滤条件
+3. 5次查询后有结果则返回；无结果也**必须停止并告知用户**
+4. **坚决禁止**无限循环、反复尝试相同条件
+5. 查询失败（接口报错、超时）同样计入5次限制，不额外增加重试
+6. 返回结果时说明：已尝试了哪些查询条件，最终是否获取到日志
+7. **索引遗漏处理规则**：当发现 level 等字段检索存在遗漏（如实际 ERROR 数多于检索命中数）时，先评估遗漏日志是否影响结论；若已有证据足以回答任务问题，**不做全量补拉**，仅在查询摘要中注明"level 索引存在遗漏，已基于精确检索结果作答"。
 
 #### 查询为空时的处理
 
@@ -504,6 +512,10 @@ $from = $now - 15 * 24 * 60 * 60 * 1000  # 15天前
 
 ### 分页查询
 
+> **两个数字的区别**：`--Limit` = 单次请求返回条数（页大小，最大 1000）；Context 的「最多1万条」= 同一 Context token 累计翻页的总容量上限。需要翻页时始终使用 `--Limit 1000`。
+>
+> **分页使用门槛**：Context 分页仅在同时满足以下两点时使用：① 精确条件检索命中量超过单页（>1000 条）；② 命中日志条条关键（如全量 ERROR 日志）。**严禁**在"全量拉取再本地筛选"模式下使用分页。
+
 SearchLog 返回 `Context` 字段，透传可获取后续日志（最多1万条，过期1小时）：
 
 ```bash
@@ -512,7 +524,7 @@ $env:PYTHONUTF8="1"; tccli cls SearchLog --cli-unfold-argument `
     --region <环境对应地域> `
     --TopicId <环境对应TopicId> `
     --From <From> --To <To> `
-    --QueryString 'traceId:<traceId值>' --Context <上次返回的Context>
+    --QueryString 'traceId:<traceId值>' --Context <上次返回的Context> --Limit 1000
 ```
 
 ---
