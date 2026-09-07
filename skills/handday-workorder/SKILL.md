@@ -3,7 +3,7 @@ name: handday-workorder
 description: Query handday OS platform data including workorders, orders, customers, and agents via browser automation. Use when user asks about workorders (工单), ticket status, workorder details, platform data queries, or anything related to handday OS operations system.
 ---
 
-> **环境配置**：工单系统地址从项目根目录 `.env` 文件的 `$WORKORDER_BASE_URL` 读取。如 `.env` 不存在或该值为空，**必须主动询问用户**提供工单系统地址。
+> **环境配置**：工单系统地址从主 skill（`handday-auto-bug-fix`）目录下 `.env` 文件的 `$WORKORDER_BASE_URL` 读取（位于 skill 目录，非当前工作目录/待排查项目根目录）。如 `.env` 不存在或该值为空，**必须主动询问用户**提供工单系统地址。
 
 # Handday Workorder & Platform Query
 

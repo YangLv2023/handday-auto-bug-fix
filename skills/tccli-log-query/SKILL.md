@@ -64,18 +64,26 @@ description: Query Tencent Cloud CLS logs and APM traces via TCCLI for problem d
 
 ## 环境配置加载（前置步骤）
 
-> **所有敏感配置值（TopicId、LogsetId、Region、内部系统地址）均从项目根目录 `.env` 文件读取，禁止在文档中硬编码。**
+> **所有敏感配置值（TopicId、LogsetId、Region、内部系统地址）均从主 skill（`handday-auto-bug-fix`）目录下的 `.env` 文件读取，禁止在文档中硬编码。**
+>
+> ⚠️ **位置铁律**：本 skill 是主 skill 的备份子 skill，`.env` 由主 skill 统一管理，位于**主 skill 目录**，**不是**当前工作目录，也**不是**待排查项目根目录。
 >
 > `.env` 文件已排除在 Git 追踪之外（见 `.gitignore`）。模板见 `.env.example`。
 
 ### 加载方式
 
-执行任何查询前，先读取项目根目录的 `.env` 文件：
+执行任何查询前，先按以下顺序定位并读取 `.env` 文件（找到即停）：
 
 ```bash
-# 读取 .env 文件（如存在）
-cat <project-root>/.env
+# 1. 用户级主 skill 安装目录（npm 安装后）
+cat ~/.qoder/skills/handday-auto-bug-fix/.env
+cat ~/.workbuddy/skills/handday-auto-bug-fix/.env
+
+# 2. 开发/项目级加载：主 skill 源码目录（其 SKILL.md 所在目录）
+cat <handday-auto-bug-fix-skill-dir>/.env
 ```
+
+> 均不存在时按下方「缺失处理」执行。
 
 解析出以下环境变量：
 
@@ -304,7 +312,7 @@ tccli cls SearchLog --cli-unfold-argument `
 - **TopicId（按环境选择）**：根据 Step 0.5 选择的环境确定。
 - **InstanceId**：APM 业务系统 ID（APM 查询必填，需根据实际环境确认）
 
-> **重要**：CLS 日志查询的主题和地域根据 Step 0.5 选择的环境确定，TopicId 和 Region 均从 `.env` 文件读取。不查询其他日志主题。
+> **重要**：CLS 日志查询的主题和地域根据 Step 0.5 选择的环境确定，TopicId 和 Region 均从主 skill 目录下的 `.env` 文件读取。不查询其他日志主题。
 >
 > **APM 链路查询限制**：APM 链路查询（DescribeGeneralSpanList 等）**仅支持 traceId 检索**，不支持 corpId。当只有 corpId 无 traceId 时，仅执行 CLS 日志检索，跳过 APM 链路查询。
 >
@@ -314,7 +322,7 @@ tccli cls SearchLog --cli-unfold-argument `
 
 ## Step 3: 构建查询
 
-> **环境参数映射**：以下命令示例以生产环境为例，TopicId 和 Region 从 `.env` 读取。测试环境替换为 `$CLS_TEST_REGION` 和 `$CLS_TEST_TOPIC_ID`（详见 Step 0.5）。
+> **环境参数映射**：以下命令示例以生产环境为例，TopicId 和 Region 从主 skill 目录下的 `.env` 读取。测试环境替换为 `$CLS_TEST_REGION` 和 `$CLS_TEST_TOPIC_ID`（详见 Step 0.5）。
 >
 > **Windows 编码**：每条 tccli 命令前设置 `$env:PYTHONUTF8="1"`。
 >

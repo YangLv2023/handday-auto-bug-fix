@@ -183,6 +183,25 @@ function installToTarget(target, sourceDir) {
     copyFile(pkgPath, path.join(skillDir, 'package.json'));
   }
 
+  // 2.1 复制 .env（存在时）到 skill 目录：agent 运行时从 skill 目录读取环境配置，
+  //     而非当前工作目录/待排查项目根目录
+  const envSrc = path.join(sourceDir, '.env');
+  const envDest = path.join(skillDir, '.env');
+  if (fs.existsSync(envSrc)) {
+    if (fs.existsSync(envDest)) {
+      // 目标已存在则保留用户本地配置，不覆盖
+      logSkip('.env（目标已存在，保留本地配置，跳过）');
+      skipped++;
+    } else {
+      copyFile(envSrc, envDest);
+      logOk('.env（环境配置已复制到 skill 目录）');
+      copied++;
+    }
+  } else {
+    logSkip('.env（源不存在，跳过；使用时可将 .env.example 复制为 skill 目录下的 .env）');
+    skipped++;
+  }
+
   // 3. Workbuddy 专属：直接安装 agents 到 ~/.workbuddy/agents/
   if (agentsDir) {
     ensureDir(agentsDir);
@@ -279,7 +298,7 @@ function install(targetArg) {
   if (targets.includes(TARGETS.WORKBUDDY)) {
     tips.push('Workbuddy: 执行 /reload-plugins 后即可使用，无需重启');
   }
-  tips.push('配置模板: skill 目录下的 .env.example 可复制为待排查项目根目录的 .env 并填入真实值（缺失时 agent 会主动询问）');
+  tips.push('配置: .env 位于 skill 目录（非待排查项目根目录），安装时已随包复制；缺失时可将 skill 目录下的 .env.example 复制为 .env 并填入真实值（缺失时 agent 会主动询问）');
   if (tips.length > 0) {
     console.log(`\n  \x1b[33m提示:\x1b[0m`);
     for (const tip of tips) {
@@ -379,6 +398,10 @@ function statusForTarget(target) {
       const exists = fs.existsSync(path.join(skillDir, file));
       console.log(`    ${exists ? '\x1b[32m✓\x1b[0m' : '\x1b[31m✗\x1b[0m'} ${file}`);
     }
+
+    // 环境配置检查（可选文件，缺失时 agent 会主动询问用户）
+    const envExists = fs.existsSync(path.join(skillDir, '.env'));
+    console.log(`    ${envExists ? '\x1b[32m✓\x1b[0m' : '\x1b[33m!\x1b[0m'} .env${envExists ? '' : '（不存在，可将 .env.example 复制为 .env）'}`);
 
     // Workbuddy 专属：检查直接安装的 agents
     if (agentsDir) {

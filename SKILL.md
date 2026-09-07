@@ -46,13 +46,23 @@ description: 全自动Bug诊断与修复编排器。采用多Agent协作模式�
 
 ## 环境配置加载
 
-> **所有内部系统地址、云资源配置（TopicId、Region 等）均从项目根目录 `.env` 文件读取，禁止在文档中硬编码。**
+> **所有内部系统地址、云资源配置（TopicId、Region 等）均从 skill 目录（本 SKILL.md 所在目录）的 `.env` 文件读取，禁止在文档中硬编码。**
 >
-> `.env` 已排除在 Git 追踪之外（见 `.gitignore`）。模板见 `.env.example`。
+> ⚠️ **位置铁律**：`.env` 位于 **skill 目录**，**不是**当前工作目录，也**不是**待排查代码项目的根目录。即使「前置步骤：工作目录校验」切换到代码项目目录，`.env` 的查找位置仍然不变。
 >
-> **加载时机**：PM 在 Step 1 识别 Bug 来源时，先读取 `.env` 获取 `$WORKORDER_BASE_URL` 和 `$ZENTAO_BASE_URL`，用于匹配用户输入中的链接来源。
+> `.env` 已排除在 Git 追踪之外（见 `.gitignore`）。模板见 `.env.example`，npm 安装器安装时会将源目录的 `.env` 复制到目标 skill 目录。
 >
-> **缺失处理**：如 `.env` 文件不存在或某项为空，**必须主动询问用户**提供对应值。
+> ### 查找方式
+>
+> PM 按以下顺序定位 `.env`（找到即停）：
+>
+> 1. 用户级 skill 安装目录：`~/.qoder/skills/handday-auto-bug-fix/.env`、`~/.workbuddy/skills/handday-auto-bug-fix/.env`
+> 2. 当前会话加载本 skill 的源码目录（即本 SKILL.md 所在目录，项目级加载时按实际路径）
+> 3. 均不存在 → 按下方「缺失处理」询问用户
+>
+> **加载时机**：PM 在 Step 1 识别 Bug 来源时，先读取 skill 目录下的 `.env` 获取 `$WORKORDER_BASE_URL` 和 `$ZENTAO_BASE_URL`，用于匹配用户输入中的链接来源。
+>
+> **缺失处理**：如 `.env` 文件不存在或某项为空，**必须主动询问用户**提供对应值，并提示用户将 skill 目录下的 `.env.example` 复制为 `.env` 后填入真实值。
 
 ---
 

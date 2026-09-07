@@ -287,7 +287,7 @@ Skill 会在检测到以下关键词时自动激活：
 - 前端代码目录：`E:\workspace\handday-web`（Vue 前端项目）
 - 技术栈：Spring Boot + Java 8 + Spring Cloud + Nacos + MyBatis
 - 代码检索：CodeGraph（68 万+ 节点索引）
-- 工单平台：地址配置于 `.env` 文件（`WORKORDER_BASE_URL`）
+- 工单平台：地址配置于 skill 目录下的 `.env` 文件（`WORKORDER_BASE_URL`），安装器会随包复制，缺失时 agent 会主动询问
 
 如需在其他项目中使用，需修改 `SKILL.md` 中的：
 1. 前端项目约束（目录路径、分支策略）

@@ -54,7 +54,7 @@ skills:
 
 - **Windows 编码**：每条 tccli 命令前设置 `$env:PYTHONUTF8="1"` 避免中文乱码
 - **时间戳精度**：CLS 用毫秒时间戳，APM 用秒时间戳，切勿混淆
-- **CLS 环境配置**：根据 Step 2 选择环境，TopicId 和 Region 均从项目根目录 `.env` 文件读取（详见 tccli-log-query/SKILL.md「环境配置加载」章节）：
+- **CLS 环境配置**：根据 Step 2 选择环境，TopicId 和 Region 均从主 skill（`handday-auto-bug-fix`）目录下的 `.env` 文件读取（详见 tccli-log-query/SKILL.md「环境配置加载」章节）：
   - 生产环境：`--region $CLS_PROD_REGION`，`--TopicId $CLS_PROD_TOPIC_ID`
   - 测试环境：`--region $CLS_TEST_REGION`，`--TopicId $CLS_TEST_TOPIC_ID`
 - **参数展开**：所有 tccli 命令需带 `--cli-unfold-argument` 参数

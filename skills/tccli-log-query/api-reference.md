@@ -2,7 +2,7 @@
 
 本文档提供 CLS 日志服务和 APM 应用性能监控相关查询命令的详细参数说明。
 
-> **环境配置**：本 skill 支持生产/测试双环境，环境选择规则和配置表 → 详见 [SKILL.md](SKILL.md) Step 0.5。所有 TopicId、Region 等敏感值从项目根目录 `.env` 文件读取。
+> **环境配置**：本 skill 支持生产/测试双环境，环境选择规则和配置表 → 详见 [SKILL.md](SKILL.md) Step 0.5。所有 TopicId、Region 等敏感值从主 skill（`handday-auto-bug-fix`）目录下的 `.env` 文件读取。
 >
 > 以下示例以生产环境为例。测试环境请替换为 `$CLS_TEST_REGION` 和 `$CLS_TEST_TOPIC_ID`。
 
