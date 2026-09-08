@@ -27,6 +27,8 @@ description: 全自动Bug诊断与修复编排器。采用多Agent协作模式�
 >
 > **安装后须知**：`tccli-setup`、`tccli-log-query` 子 skill 和 `tencent-cloud-troubleshooter` 子 agent 会随 Step 0 自动检查并安装。已存在则跳过。
 >
+> ⚠️ **版本同步铁律**：顶层独立安装的子 skill（`~/.qoder/skills/tccli-log-query/` 等）和子 agent（`~/.qoder/agents/` 等）是本包的**派生副本**，其内容以主 skill 内置版（`skills/`、`agents/` 备份）为准。npm 升级安装（`npx @handday-neil/auto-bug-fix@latest install`）时会**强制覆盖刷新**顶层副本；但若长期未升级，可能出现顶层旧版文档与主 skill 新版文档表述不一致（如 `.env` 位置说明）。**当两者冲突时，一律以主 skill 内置版为准**。发现 subagent 依据过时表述执行（如去项目根目录找 `.env`）时，应提醒用户执行升级安装刷新顶层副本。
+>
 > **多环境支持**：同时支持 Qoder（`~/.qoder/`）和 Workbuddy（`~/.workbuddy/`）两种环境。npm 安装器默认同时安装到两个环境，也可通过 `--target qoder` 或 `--target workbuddy` 指定单一目标。Workbuddy 安装后需执行 `/reload-plugins` 生效。
 
 ---

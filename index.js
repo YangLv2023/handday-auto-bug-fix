@@ -90,11 +90,12 @@ function getTargetDirs(target) {
   const home = os.homedir();
   switch (target) {
     case TARGETS.QODER:
-      // Qoder：所有文件统一放在 skill 目录下，agents 和子 skill 由 Step 0 运行时初始化
+      // Qoder：主 skill 统一放在 skill 目录下；同时直装顶层 agents 和子 skill
+      // （运行时派发 subagent / 加载子 skill 优先命中顶层路径，必须随包升级刷新，否则旧版残留）
       return {
         skillDir: path.join(home, '.qoder', 'skills', SKILL_NAME),
-        agentsDir: null,
-        subSkillsBaseDir: null,
+        agentsDir: path.join(home, '.qoder', 'agents'),
+        subSkillsBaseDir: path.join(home, '.qoder', 'skills'),
         home,
       };
     case TARGETS.WORKBUDDY:
@@ -202,7 +203,8 @@ function installToTarget(target, sourceDir) {
     skipped++;
   }
 
-  // 3. Workbuddy 专属：直接安装 agents 到 ~/.workbuddy/agents/
+  // 3. 直装 agents 到顶层 agents 目录（Qoder: ~/.qoder/agents/，Workbuddy: ~/.workbuddy/agents/）
+  //    copyFileSync 默认覆盖，保证升级时顶层 agent 定义与包版本一致，避免旧文档残留
   if (agentsDir) {
     ensureDir(agentsDir);
     console.log(`\n  \x1b[36m→\x1b[0m 安装 agents 到 ${agentsDir}`);
@@ -220,7 +222,8 @@ function installToTarget(target, sourceDir) {
     }
   }
 
-  // 4. Workbuddy 专属：直接安装子 skill 到 ~/.workbuddy/skills/<name>/
+  // 4. 直装子 skill 到顶层 skills 目录（Qoder: ~/.qoder/skills/<name>/，Workbuddy: ~/.workbuddy/skills/<name>/）
+  //    同样覆盖刷新，避免顶层旧版子 skill 文档与主 skill 内置新版不一致
   if (subSkillsBaseDir) {
     console.log(`\n  \x1b[36m→\x1b[0m 安装子 skill 到 ${subSkillsBaseDir}`);
     for (const subSkill of SUB_SKILL_DIRS) {
@@ -326,7 +329,7 @@ function uninstallFromTarget(target) {
     logSkip(`${skillDir} 不存在`);
   }
 
-  // Workbuddy 专属：删除直接安装的 agents
+  // 删除直接安装的顶层 agents（Qoder / Workbuddy）
   if (agentsDir) {
     for (const agent of AGENT_TEMPLATES) {
       const agentFile = path.join(agentsDir, agent.dest);
@@ -337,7 +340,7 @@ function uninstallFromTarget(target) {
     }
   }
 
-  // Workbuddy 专属：删除直接安装的子 skill
+  // 删除直接安装的顶层子 skill（Qoder / Workbuddy）
   if (subSkillsBaseDir) {
     for (const subSkill of SUB_SKILL_DIRS) {
       const subSkillDir = path.join(subSkillsBaseDir, subSkill.name);
@@ -403,7 +406,7 @@ function statusForTarget(target) {
     const envExists = fs.existsSync(path.join(skillDir, '.env'));
     console.log(`    ${envExists ? '\x1b[32m✓\x1b[0m' : '\x1b[33m!\x1b[0m'} .env${envExists ? '' : '（不存在，可将 .env.example 复制为 .env）'}`);
 
-    // Workbuddy 专属：检查直接安装的 agents
+    // 检查直接安装的顶层 agents
     if (agentsDir) {
       console.log(`\n  Agents 直装检查 (${agentsDir}):`);
       for (const agent of AGENT_TEMPLATES) {
@@ -412,7 +415,7 @@ function statusForTarget(target) {
       }
     }
 
-    // Workbuddy 专属：检查直接安装的子 skill
+    // 检查直接安装的顶层子 skill
     if (subSkillsBaseDir) {
       console.log(`\n  子 Skill 直装检查 (${subSkillsBaseDir}):`);
       for (const subSkill of SUB_SKILL_DIRS) {
